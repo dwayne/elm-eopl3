@@ -9,4 +9,5 @@ set -euo pipefail
 cd "${project:?}" && \
   elm-format         \
     src              \
+    tests            \
     "${@:---yes}"
