@@ -1,0 +1,11 @@
+{
+  "packages": [
+    "elmPackages.elm",
+    "elmPackages.elm-format",
+    "elmPackages.elm-test"
+  ],
+  "env": {
+    "project": "$PWD",
+    "PATH": "$PWD/bin:$PATH"
+  }
+}
