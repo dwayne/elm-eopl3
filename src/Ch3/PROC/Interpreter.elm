@@ -8,15 +8,21 @@ import Ch3.PROC.Parser as P
 type Value
     = VNumber Number
     | VBool Bool
+    | VProcedure Procedure
 
 
 type alias Env =
     Env.Env Id Value
 
 
+type Procedure
+    = Closure Id Expr Env
+
+
 type Type
     = TNumber
     | TBool
+    | TProcedure
 
 
 type Error
@@ -102,6 +108,24 @@ evalExpr expr env =
                         evalExpr body (Env.extend id ve env)
                     )
 
+        Proc id body ->
+            Ok <| VProcedure <| Closure id body env
+
+        Call rator rand ->
+            evalExpr rator env
+                |> Result.andThen
+                    (\vRator ->
+                        toProcedure vRator
+                            |> Result.andThen
+                                (\f ->
+                                    evalExpr rand env
+                                        |> Result.andThen
+                                            (\arg ->
+                                                applyProcedure f arg
+                                            )
+                                )
+                    )
+
 
 computeDiff : Value -> Value -> Result RuntimeError Value
 computeDiff va vb =
@@ -149,6 +173,25 @@ computeIf vTest consequent alternative env =
                     }
 
 
+toProcedure : Value -> Result RuntimeError Procedure
+toProcedure v =
+    case v of
+        VProcedure f ->
+            Ok f
+
+        _ ->
+            Err <|
+                TypeError
+                    { expected = [ TProcedure ]
+                    , actual = [ typeOf v ]
+                    }
+
+
+applyProcedure : Procedure -> Value -> Result RuntimeError Value
+applyProcedure (Closure id body env) v =
+    evalExpr body (Env.extend id v env)
+
+
 typeOf : Value -> Type
 typeOf v =
     case v of
@@ -157,3 +200,6 @@ typeOf v =
 
         VBool _ ->
             TBool
+
+        VProcedure _ ->
+            TProcedure

@@ -30,6 +30,8 @@ expr =
         , zeroExpr
         , ifExpr
         , letExpr
+        , procExpr
+        , callExpr
         , constExpr
         , varExpr
         ]
@@ -77,6 +79,25 @@ letExpr =
         |= P.lazy (\_ -> expr)
 
 
+procExpr : Parser Expr
+procExpr =
+    P.succeed Proc
+        |. L.keyword "proc"
+        |. L.symbol "("
+        |= id
+        |. L.symbol ")"
+        |= P.lazy (\_ -> expr)
+
+
+callExpr : Parser Expr
+callExpr =
+    P.succeed Call
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -103,6 +124,7 @@ id =
                 , "if"
                 , "in"
                 , "let"
+                , "proc"
                 , "then"
                 , "zero?"
                 ]

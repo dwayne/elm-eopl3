@@ -22,7 +22,32 @@ makeIdentifier =
 
 digits : Parser Int
 digits =
-    lexeme P.int
+    --
+    -- Don't use P.int.
+    --
+    -- Why? Read https://github.com/elm/parser/issues/44#issuecomment-1116857918.
+    --
+    -- I ran into this problem once again when parsing
+    --
+    -- """
+    -- ...
+    -- (((oddmaker oddmaker) evenmaker) -(x, 1))
+    -- ...
+    -- """
+    --
+    -- Because "evenmaker" starts with an "e" it is parsed unsuccessfully by P.int.
+    --
+    chompOneOrMore Char.isDigit
+        |> P.getChompedString
+        |> P.map (Maybe.withDefault 0 << String.toInt)
+        |> lexeme
+
+
+chompOneOrMore : (Char -> Bool) -> Parser ()
+chompOneOrMore isGood =
+    P.succeed ()
+        |. P.chompIf isGood
+        |. P.chompWhile isGood
 
 
 keyword : String -> Parser ()

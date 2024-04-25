@@ -53,6 +53,196 @@ suite =
                 """
               , VNumber -5
               )
+            , ( """
+                let f = proc (x) -(x, 11)
+                in (f (f 77))
+                """
+              , VNumber 55
+              )
+            , ( """
+                (proc (f) (f (f 77))
+                 proc (x) -(x, 11))
+                """
+              , VNumber 55
+              )
+            , ( """
+                let x = 200
+                in let f = proc (z) -(z, x)
+                   in let x = 100
+                      in let g = proc (z) -(z, x)
+                         in -((f 1), (g 1))
+                """
+              , VNumber -100
+              )
+            , ( """
+                let sum = proc (x) proc (y) -(x, -(0, y))
+                in ((sum 3) 4)
+                """
+                --
+                -- Example for exercise 3.20
+                --
+              , VNumber 7
+              )
+            , ( """
+                let makemult =
+                  proc (maker)
+                    proc (x)
+                      if zero?(x) then
+                        0
+                      else
+                        -(((maker maker) -(x, 1)), -(0, 4))
+                in let timesfour = proc (x) ((makemult makemult) x)
+                   in (timesfour 3)
+                """
+                --
+                -- Example for exercise 3.23 - timesfour
+                --
+                -- Changes:
+                -- 1. -4 = -(0, 4)
+                -- 2. times4 = timesfour
+                --
+              , VNumber 12
+              )
+            , ( """
+                let timesmaker =
+                  proc (maker)
+                    proc (x)
+                      proc (y)
+                        if zero?(y) then
+                          0
+                        else
+                          -((((maker maker) x) -(y, 1)), -(0, x))
+                in let times = proc (x) proc (y) (((timesmaker timesmaker) x) y)
+                   in let factmaker =
+                        proc (maker)
+                          proc (n)
+                            if zero?(n) then
+                              1
+                            else
+                              ((times n) ((maker maker) -(n, 1)))
+                      in let fact = proc (n) ((factmaker factmaker) n)
+                         in (fact 5)
+                """
+                --
+                -- Example for exercise 3.23 - fact
+                --
+              , VNumber 120
+              )
+            , ( """
+                let timesmaker =
+                  proc (maker)
+                    proc (x)
+                      proc (y)
+                        if zero?(y) then
+                          0
+                        else
+                          -((((maker maker) x) -(y, 1)), -(0, x))
+                in let times = (timesmaker timesmaker)
+                   in let factmaker =
+                        proc (maker)
+                          proc (n)
+                            if zero?(n) then
+                              1
+                            else
+                              ((times n) ((maker maker) -(n, 1)))
+                      in let fact = (factmaker factmaker)
+                         in (fact 5)
+                """
+                --
+                -- Example for exercise 3.23 - fact (alternative)
+                --
+                -- N.B.
+                -- times = (timesmaker timesmaker)
+                -- fact = (factmaker factmaker)
+                --
+              , VNumber 120
+              )
+            , ( """
+                let evenmaker =
+                  proc (evenmaker)
+                    proc (oddmaker)
+                      proc (x)
+                        if zero?(x) then
+                          1
+                        else
+                          (((oddmaker oddmaker) evenmaker) -(x, 1))
+                in let oddmaker =
+                     proc (oddmaker)
+                       proc (evenmaker)
+                         proc (x)
+                           if zero?(x) then
+                             0
+                           else
+                             (((evenmaker evenmaker) oddmaker) -(x, 1))
+                   in let odd = ((oddmaker oddmaker) evenmaker)
+                      in (odd 13)
+                """
+                --
+                -- Example for exercise 3.24 - odd and even
+                --
+              , VNumber 1
+              )
+            , ( """
+                let makerec =
+                  proc (f)
+                    let d =
+                      proc (x)
+                        proc (z) ((f (x x)) z)
+                    in proc (n) ((f (d d)) n)
+                in let maketimes =
+                     proc (f)
+                       proc (x)
+                         if zero?(x) then
+                           0
+                         else
+                           -((f -(x, 1)), -(0, 4))
+                   in let times = (makerec maketimes)
+                      in (times 3)
+                """
+                --
+                -- Example for exercise 3.25 - from the book
+                --
+                -- Changes:
+                -- 1. maketimes4 = maketimes
+                -- 2. times4 = times
+                -- 3. -4 = -(0, 4)
+                --
+              , VNumber 12
+              )
+            --
+            -- My derivation doesn't work in Elm. I get the following error:
+            --
+            --   This test failed because it threw an exception: "RangeError: Maximum call stack size exceeded"
+            --
+            -- However, it works in Haskell.
+            --
+            --, ( """
+            --    let makerec =
+            --      proc (f)
+            --        let inf =
+            --          proc (inf)
+            --            (f (inf inf))
+            --        in (inf inf)
+            --    in let maketimes =
+            --         proc (f)
+            --           proc (x)
+            --             if zero?(x) then
+            --               0
+            --             else
+            --               -((f -(x, 1)), -(0, 4))
+            --       in let times = (makerec maketimes)
+            --          in (times 3)
+            --    """
+            --    --
+            --    -- Example for exercise 3.25 - my derivation
+            --    --
+            --    -- Changes:
+            --    -- 1. maketimes4 = maketimes
+            --    -- 2. times4 = times
+            --    -- 3. -4 = -(0, 4)
+            --    --
+            --  , VNumber 12
+            --  )
             ]
 
 
