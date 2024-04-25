@@ -12,7 +12,7 @@ type Value
 
 
 type alias Env =
-    Env.Env Id Value
+    Env.Env Id Value Expr
 
 
 type Procedure
@@ -68,13 +68,16 @@ evalExpr expr env =
         Const n ->
             Ok <| VNumber n
 
-        Var id ->
-            case Env.apply id env of
-                Just v ->
-                    Ok v
+        Var name ->
+            case Env.find name env of
+                Just (Env.Value value) ->
+                    Ok value
+
+                Just (Env.Procedure param body savedEnv) ->
+                    Ok <| VProcedure <| Closure param body savedEnv
 
                 Nothing ->
-                    Err <| IdentifierNotFound id
+                    Err <| IdentifierNotFound name
 
         Diff a b ->
             evalExpr a env
@@ -110,6 +113,9 @@ evalExpr expr env =
 
         Proc id body ->
             Ok <| VProcedure <| Closure id body env
+
+        Letrec name param body e ->
+            evalExpr e (Env.extendRec name param body env)
 
         Call rator rand ->
             evalExpr rator env

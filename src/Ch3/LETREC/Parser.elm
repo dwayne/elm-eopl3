@@ -31,6 +31,7 @@ expr =
         , ifExpr
         , letExpr
         , procExpr
+        , letrecExpr
         , callExpr
         , constExpr
         , varExpr
@@ -89,6 +90,20 @@ procExpr =
         |= P.lazy (\_ -> expr)
 
 
+letrecExpr : Parser Expr
+letrecExpr =
+    P.succeed Letrec
+        |. L.keyword "letrec"
+        |= id
+        |. L.symbol "("
+        |= id
+        |. L.symbol ")"
+        |. L.symbol "="
+        |= P.lazy (\_ -> expr)
+        |. L.keyword "in"
+        |= P.lazy (\_ -> expr)
+
+
 callExpr : Parser Expr
 callExpr =
     P.succeed Call
@@ -124,6 +139,7 @@ id =
                 , "if"
                 , "in"
                 , "let"
+                , "letrec"
                 , "proc"
                 , "then"
                 , "zero?"

@@ -18,6 +18,7 @@ type Expr
     | If Expr Expr Expr
     | Let Id Expr Expr
     | Proc Id Expr
+    | Letrec Id Id Expr Expr
     | Call Expr Expr
 
 
