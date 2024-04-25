@@ -104,18 +104,18 @@ evalExpr expr env =
                         computeIf vTest consequent alternative env
                     )
 
-        Let id e body ->
+        Let name e body ->
             evalExpr e env
                 |> Result.andThen
                     (\ve ->
-                        evalExpr body (Env.extend id ve env)
+                        evalExpr body (Env.extend name ve env)
                     )
 
-        Proc id body ->
-            Ok <| VProcedure <| Closure id body env
+        Proc param body ->
+            Ok <| VProcedure <| Closure param body env
 
-        Letrec name param body e ->
-            evalExpr e (Env.extendRec name param body env)
+        Letrec name param procBody letrecBody ->
+            evalExpr letrecBody (Env.extendRec name param procBody env)
 
         Call rator rand ->
             evalExpr rator env
@@ -194,8 +194,8 @@ toProcedure v =
 
 
 applyProcedure : Procedure -> Value -> Result RuntimeError Value
-applyProcedure (Closure id body env) v =
-    evalExpr body (Env.extend id v env)
+applyProcedure (Closure param body savedEnv) value =
+    evalExpr body (Env.extend param value savedEnv)
 
 
 typeOf : Value -> Type

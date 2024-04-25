@@ -1,39 +1,39 @@
 module Ch3.LET.Env exposing
     ( Env
-    , apply
     , empty
     , extend
+    , find
     )
 
 
-type Env k v
-    = Env (List ( k, v ))
+type Env id v
+    = Env (List ( id, v ))
 
 
-empty : Env k v
+empty : Env id v
 empty =
     Env []
 
 
-extend : k -> v -> Env k v -> Env k v
-extend k v (Env bindings) =
-    Env (( k, v ) :: bindings)
+extend : id -> v -> Env id v -> Env id v
+extend name value (Env bindings) =
+    Env (( name, value ) :: bindings)
 
 
-apply : k -> Env k v -> Maybe v
-apply k (Env bindings) =
-    lookup k bindings
+find : id -> Env id v -> Maybe v
+find name (Env bindings) =
+    lookup name bindings
 
 
-lookup : k -> List ( k, v ) -> Maybe v
+lookup : id -> List ( id, v ) -> Maybe v
 lookup needle assoc =
     case assoc of
         [] ->
             Nothing
 
-        ( k, v ) :: rest ->
-            if needle == k then
-                Just v
+        ( name, value ) :: rest ->
+            if needle == name then
+                Just value
 
             else
                 lookup needle rest

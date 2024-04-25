@@ -1,7 +1,7 @@
 module Ch3.PROC.Interpreter exposing (Value(..), run)
 
+import Ch3.LET.Env as Env
 import Ch3.PROC.AST as AST exposing (..)
-import Ch3.PROC.Env as Env
 import Ch3.PROC.Parser as P
 
 
@@ -68,13 +68,13 @@ evalExpr expr env =
         Const n ->
             Ok <| VNumber n
 
-        Var id ->
-            case Env.apply id env of
-                Just v ->
-                    Ok v
+        Var name ->
+            case Env.find name env of
+                Just value ->
+                    Ok value
 
                 Nothing ->
-                    Err <| IdentifierNotFound id
+                    Err <| IdentifierNotFound name
 
         Diff a b ->
             evalExpr a env
@@ -101,15 +101,15 @@ evalExpr expr env =
                         computeIf vTest consequent alternative env
                     )
 
-        Let id e body ->
+        Let name e body ->
             evalExpr e env
                 |> Result.andThen
                     (\ve ->
-                        evalExpr body (Env.extend id ve env)
+                        evalExpr body (Env.extend name ve env)
                     )
 
-        Proc id body ->
-            Ok <| VProcedure <| Closure id body env
+        Proc param body ->
+            Ok <| VProcedure <| Closure param body env
 
         Call rator rand ->
             evalExpr rator env
@@ -188,8 +188,8 @@ toProcedure v =
 
 
 applyProcedure : Procedure -> Value -> Result RuntimeError Value
-applyProcedure (Closure id body env) v =
-    evalExpr body (Env.extend id v env)
+applyProcedure (Closure param body savedEnv) value =
+    evalExpr body (Env.extend param value savedEnv)
 
 
 typeOf : Value -> Type

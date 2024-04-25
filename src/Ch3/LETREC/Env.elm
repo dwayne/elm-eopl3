@@ -1,6 +1,6 @@
 module Ch3.LETREC.Env exposing
     ( Env
-    , Found(..)
+    , Item(..)
     , empty
     , extend
     , extendRec
@@ -35,27 +35,27 @@ extendRec =
     RecBind
 
 
-type Found id v e
+type Item id v e
     = Value v
     | Procedure id e (Env id v e)
 
 
-find : id -> Env id v e -> Maybe (Found id v e)
+find : id -> Env id v e -> Maybe (Item id v e)
 find needle env =
     case env of
         Empty ->
             Nothing
 
-        Bind name value nextEnv ->
+        Bind name value restEnv ->
             if needle == name then
                 Just <| Value value
 
             else
-                find needle nextEnv
+                find needle restEnv
 
-        RecBind name param body nextEnv ->
+        RecBind name param body restEnv ->
             if needle == name then
                 Just <| Procedure param body env
 
             else
-                find needle nextEnv
+                find needle restEnv

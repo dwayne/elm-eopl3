@@ -62,13 +62,13 @@ evalExpr expr env =
         Const n ->
             Ok <| VNumber n
 
-        Var id ->
-            case Env.apply id env of
-                Just v ->
-                    Ok v
+        Var name ->
+            case Env.find name env of
+                Just value ->
+                    Ok value
 
                 Nothing ->
-                    Err <| IdentifierNotFound id
+                    Err <| IdentifierNotFound name
 
         Diff a b ->
             evalExpr a env
@@ -95,11 +95,11 @@ evalExpr expr env =
                         computeIf vTest consequent alternative env
                     )
 
-        Let id e body ->
+        Let name e body ->
             evalExpr e env
                 |> Result.andThen
                     (\ve ->
-                        evalExpr body (Env.extend id ve env)
+                        evalExpr body (Env.extend name ve env)
                     )
 
 
