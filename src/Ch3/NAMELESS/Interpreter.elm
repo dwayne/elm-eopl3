@@ -1,7 +1,9 @@
 module Ch3.NAMELESS.Interpreter exposing (Value(..), run)
 
-import Ch3.LET.Env as Env
-import Ch3.PROC.AST as AST exposing (..)
+import Ch3.NAMELESS.Env as Env
+import Ch3.NAMELESS.Translator as T
+import Ch3.NAMELESS.Translator.AST as AST exposing (..)
+import Ch3.PROC.AST
 import Ch3.PROC.Parser as P
 
 
@@ -12,11 +14,11 @@ type Value
 
 
 type alias Env =
-    Env.Env Id Value
+    Env.Env Value
 
 
 type Procedure
-    = Closure Id Expr Env
+    = Closure Expr Env
 
 
 type Type
@@ -31,19 +33,27 @@ type Error
 
 
 type RuntimeError
-    = IdentifierNotFound Id
+    = IdentifierNotFound Ch3.PROC.AST.Id
     | TypeError
         { expected : List Type
         , actual : List Type
         }
+    | UnexpectedError String
 
 
 run : String -> Result Error Value
 run input =
     case P.parse input of
-        Ok program ->
-            evalProgram program
-                |> Result.mapError RuntimeError
+        Ok procProgram ->
+            case T.translate procProgram of
+                Ok namelessProgram ->
+                    evalProgram namelessProgram
+                        |> Result.mapError RuntimeError
+
+                Err e ->
+                    case e of
+                        T.IdentifierNotFound name ->
+                            Err <| RuntimeError <| IdentifierNotFound name
 
         Err e ->
             Err <| SyntaxError e
@@ -56,10 +66,13 @@ evalProgram (Program expr) =
 
 initEnv : Env
 initEnv =
+    --
+    -- x = 10, v = 5, i = 1
+    --
     Env.empty
-        |> Env.extend "x" (VNumber 10)
-        |> Env.extend "v" (VNumber 5)
-        |> Env.extend "i" (VNumber 1)
+        |> Env.extend (VNumber 10)
+        |> Env.extend (VNumber 5)
+        |> Env.extend (VNumber 1)
 
 
 evalExpr : Expr -> Env -> Result RuntimeError Value
@@ -68,13 +81,16 @@ evalExpr expr env =
         Const n ->
             Ok <| VNumber n
 
-        Var name ->
-            case Env.find name env of
+        Var lexAddr ->
+            case Env.find lexAddr env of
                 Just value ->
                     Ok value
 
                 Nothing ->
-                    Err <| IdentifierNotFound name
+                    --
+                    -- This should NEVER happen.
+                    --
+                    Err <| UnexpectedError <| "Lexical address not found: " ++ String.fromInt lexAddr
 
         Diff a b ->
             evalExpr a env
@@ -101,15 +117,15 @@ evalExpr expr env =
                         computeIf vTest consequent alternative env
                     )
 
-        Let name e body ->
+        Let e body ->
             evalExpr e env
                 |> Result.andThen
                     (\ve ->
-                        evalExpr body (Env.extend name ve env)
+                        evalExpr body (Env.extend ve env)
                     )
 
-        Proc param body ->
-            Ok <| VProcedure <| Closure param body env
+        Proc body ->
+            Ok <| VProcedure <| Closure body env
 
         Call rator rand ->
             evalExpr rator env
@@ -188,8 +204,8 @@ toProcedure v =
 
 
 applyProcedure : Procedure -> Value -> Result RuntimeError Value
-applyProcedure (Closure param body savedEnv) value =
-    evalExpr body (Env.extend param value savedEnv)
+applyProcedure (Closure body savedEnv) value =
+    evalExpr body (Env.extend value savedEnv)
 
 
 typeOf : Value -> Type

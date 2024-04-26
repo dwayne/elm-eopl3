@@ -1,6 +1,6 @@
-module Ch3.NAMELESS.AST exposing
+module Ch3.NAMELESS.Translator.AST exposing
     ( Expr(..)
-    , Id
+    , LexAddr
     , Number
     , Program(..)
     )
@@ -12,12 +12,12 @@ type Program
 
 type Expr
     = Const Number
-    | Var Id
+    | Var LexAddr
     | Diff Expr Expr
     | Zero Expr
     | If Expr Expr Expr
-    | Let Id Expr Expr
-    | Proc Id Expr
+    | Let Expr Expr
+    | Proc Expr
     | Call Expr Expr
 
 
@@ -25,5 +25,5 @@ type alias Number =
     Int
 
 
-type alias Id =
-    String
+type alias LexAddr =
+    Int
