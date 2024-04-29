@@ -2,6 +2,7 @@ module Ch4.EXPLICIT_REFS.AST exposing
     ( Expr(..)
     , Id
     , Number
+    , Procrec
     , Program(..)
     )
 
@@ -18,8 +19,15 @@ type Expr
     | If Expr Expr Expr
     | Let Id Expr Expr
     | Proc Id Expr
-    | Letrec Id Id Expr Expr
+    | Letrec (List Procrec) Expr
     | Call Expr Expr
+
+
+type alias Procrec =
+    { name : Id
+    , param : Id
+    , body : Expr
+    }
 
 
 type alias Number =

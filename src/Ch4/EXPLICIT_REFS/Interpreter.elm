@@ -114,8 +114,8 @@ evalExpr expr env =
         Proc param body ->
             Ok <| VProcedure <| Closure param body env
 
-        Letrec name param procBody letrecBody ->
-            evalExpr letrecBody (Env.extendRec name param procBody env)
+        Letrec procrecs letrecBody ->
+            evalExpr letrecBody (Env.extendRec procrecs env)
 
         Call rator rand ->
             evalExpr rator env

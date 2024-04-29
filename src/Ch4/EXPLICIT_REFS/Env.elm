@@ -1,6 +1,7 @@
 module Ch4.EXPLICIT_REFS.Env exposing
     ( Env
     , Item(..)
+    , RecBinding
     , empty
     , extend
     , extendRec
@@ -17,7 +18,14 @@ type
     --  +-------- the type for identifiers
     = Empty
     | Bind id v (Env id v e) -- name value
-    | RecBind id id e (Env id v e) -- name param body
+    | RecBind (List (RecBinding id e)) (Env id v e) -- [( name, param, body )]
+
+
+type alias RecBinding id e =
+    { name : id
+    , param : id
+    , body : e
+    }
 
 
 empty : Env id v e
@@ -30,7 +38,7 @@ extend =
     Bind
 
 
-extendRec : id -> id -> e -> Env id v e -> Env id v e
+extendRec : List (RecBinding id e) -> Env id v e -> Env id v e
 extendRec =
     RecBind
 
@@ -53,9 +61,24 @@ find needle env =
             else
                 find needle restEnv
 
-        RecBind name param body restEnv ->
-            if needle == name then
-                Just <| Procedure param body env
+        RecBind recBindings restEnv ->
+            case findRecBinding needle recBindings of
+                Just { param, body } ->
+                    Just <| Procedure param body env
+
+                Nothing ->
+                    find needle restEnv
+
+
+findRecBinding : id -> List (RecBinding id e) -> Maybe (RecBinding id e)
+findRecBinding needle recBindings =
+    case recBindings of
+        [] ->
+            Nothing
+
+        recBinding :: restRecBindings ->
+            if needle == recBinding.name then
+                Just recBinding
 
             else
-                find needle restEnv
+                findRecBinding needle restRecBindings

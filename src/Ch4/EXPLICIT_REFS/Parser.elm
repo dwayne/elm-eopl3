@@ -94,13 +94,19 @@ letrecExpr : Parser Expr
 letrecExpr =
     P.succeed Letrec
         |. L.keyword "letrec"
+        |= many procrec
+        |. L.keyword "in"
+        |= P.lazy (\_ -> expr)
+
+
+procrec : Parser Procrec
+procrec =
+    P.succeed Procrec
         |= id
         |. L.symbol "("
         |= id
         |. L.symbol ")"
         |. L.symbol "="
-        |= P.lazy (\_ -> expr)
-        |. L.keyword "in"
         |= P.lazy (\_ -> expr)
 
 
@@ -145,3 +151,17 @@ id =
                 , "zero?"
                 ]
         }
+
+
+
+-- HELPERS
+
+
+many : Parser a -> Parser (List a)
+many p =
+    P.loop [] <|
+        \rev ->
+            P.oneOf
+                [ P.map (\x -> P.Loop (x :: rev)) p
+                , P.succeed (P.Done (List.reverse rev))
+                ]
