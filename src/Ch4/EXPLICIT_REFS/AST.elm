@@ -21,6 +21,9 @@ type Expr
     | Proc Id Expr
     | Letrec (List Procrec) Expr
     | Call Expr Expr
+    | Newref Expr
+    | Deref Expr
+    | Setref Expr Expr
 
 
 type alias Procrec =

@@ -132,6 +132,15 @@ evalExpr expr env =
                                 )
                     )
 
+        Newref _ ->
+            Debug.todo "Implement newref"
+
+        Deref _ ->
+            Debug.todo "Implement deref"
+
+        Setref _ _ ->
+            Debug.todo "Implement setref"
+
 
 computeDiff : Value -> Value -> Result RuntimeError Value
 computeDiff va vb =
