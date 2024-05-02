@@ -71,209 +71,204 @@ initEnv =
         |> Env.extend "i" (VNumber 1)
 
 
-evalExpr : Expr -> Env -> Store -> ( Result RuntimeError Value, Store )
-evalExpr expr env store0 =
+evalExpr : Expr -> Env -> Eval Value
+evalExpr expr env =
     case expr of
         Const n ->
-            ( Ok <| VNumber n
-            , store0
-            )
+            succeed <| VNumber n
 
         Var name ->
-            ( case Env.find name env of
+            case Env.find name env of
                 Just (Env.Value value) ->
-                    Ok value
+                    succeed value
 
                 Just (Env.Procedure param body savedEnv) ->
-                    Ok <| VProcedure <| Closure param body savedEnv
+                    succeed <| VProcedure <| Closure param body savedEnv
 
                 Nothing ->
-                    Err <| IdentifierNotFound name
-            , store0
-            )
+                    fail <| IdentifierNotFound name
 
         Diff a b ->
-            evalExpr a env store0
+            evalExpr a env
                 |> andThen
                     (\va ->
                         evalExpr b env
-                            >> andThen
+                            |> andThen
                                 (\vb ->
                                     computeDiff va vb
                                 )
                     )
 
         Zero a ->
-            evalExpr a env store0
+            evalExpr a env
                 |> andThen computeIsZero
 
         If test consequent alternative ->
-            evalExpr test env store0
+            evalExpr test env
                 |> andThen
                     (\vTest ->
                         computeIf vTest consequent alternative env
                     )
 
         Let name e body ->
-            evalExpr e env store0
+            evalExpr e env
                 |> andThen
                     (\ve ->
                         evalExpr body (Env.extend name ve env)
                     )
 
         Proc param body ->
-            ( Ok <| VProcedure <| Closure param body env
-            , store0
-            )
+            succeed <| VProcedure <| Closure param body env
 
         Letrec procrecs letrecBody ->
-            evalExpr letrecBody (Env.extendRec procrecs env) store0
+            evalExpr letrecBody (Env.extendRec procrecs env)
 
         Call rator rand ->
-            evalExpr rator env store0
+            evalExpr rator env
                 |> andThen
                     (\vRator ->
                         toProcedure vRator
-                            >> andThen
+                            |> andThen
                                 (\f ->
                                     evalExpr rand env
-                                        >> andThen (applyProcedure f)
+                                        |> andThen (applyProcedure f)
                                 )
                     )
 
         Newref e ->
-            evalExpr e env store0
+            evalExpr e env
                 |> andThen computeNewref
 
         Deref e ->
-            evalExpr e env store0
+            evalExpr e env
                 |> andThen toRef
                 |> andThen computeDeref
 
         Setref le re ->
-            evalExpr le env store0
+            evalExpr le env
                 |> andThen toRef
                 |> andThen
                     (\ref ->
                         evalExpr re env
-                            >> andThen (computeSetRef ref)
+                            |> andThen (computeSetRef ref)
                     )
 
 
-computeDiff : Value -> Value -> Store -> ( Result RuntimeError Value, Store )
-computeDiff va vb store =
-    ( case ( va, vb ) of
+computeDiff : Value -> Value -> Eval Value
+computeDiff va vb =
+    case ( va, vb ) of
         ( VNumber a, VNumber b ) ->
-            Ok <| VNumber <| a - b
+            succeed <| VNumber <| a - b
 
         _ ->
-            Err <|
+            fail <|
                 TypeError
                     { expected = [ TNumber, TNumber ]
                     , actual = [ typeOf va, typeOf vb ]
                     }
-    , store
-    )
 
 
-computeIsZero : Value -> Store -> ( Result RuntimeError Value, Store )
-computeIsZero va store =
-    ( case va of
+computeIsZero : Value -> Eval Value
+computeIsZero va =
+    case va of
         VNumber n ->
-            Ok <| VBool <| n == 0
+            succeed <| VBool <| n == 0
 
         _ ->
-            Err <|
+            fail <|
                 TypeError
                     { expected = [ TNumber ]
                     , actual = [ typeOf va ]
                     }
-    , store
-    )
 
 
-computeIf : Value -> Expr -> Expr -> Env -> Store -> ( Result RuntimeError Value, Store )
-computeIf vTest consequent alternative env store =
+computeIf : Value -> Expr -> Expr -> Env -> Eval Value
+computeIf vTest consequent alternative env =
     case vTest of
         VBool b ->
             if b then
-                evalExpr consequent env store
+                evalExpr consequent env
 
             else
-                evalExpr alternative env store
+                evalExpr alternative env
 
         _ ->
-            ( Err <|
+            fail <|
                 TypeError
                     { expected = [ TBool ]
                     , actual = [ typeOf vTest ]
                     }
-            , store
+
+
+applyProcedure : Procedure -> Value -> Eval Value
+applyProcedure (Closure param body savedEnv) value =
+    evalExpr body (Env.extend param value savedEnv)
+
+
+computeNewref : Value -> Eval Value
+computeNewref value =
+    getStore
+        |> andThen
+            (\store0 ->
+                let
+                    ( ref, store1 ) =
+                        Store.newref value store0
+                in
+                setStore store1
+                    |> followedBy (succeed <| VRef ref)
             )
 
 
-applyProcedure : Procedure -> Value -> Store -> ( Result RuntimeError Value, Store )
-applyProcedure (Closure param body savedEnv) value store =
-    evalExpr body (Env.extend param value savedEnv) store
+computeDeref : Ref -> Eval Value
+computeDeref ref =
+    getStore
+        |> andThen
+            (\store ->
+                case Store.deref ref store of
+                    Just value ->
+                        succeed value
+
+                    Nothing ->
+                        fail <| ReferenceNotFound ref
+            )
 
 
-computeNewref : Value -> Store -> ( Result RuntimeError Value, Store )
-computeNewref value store =
-    Store.newref value store
-        |> Tuple.mapFirst (Ok << VRef)
+computeSetRef : Ref -> Value -> Eval Value
+computeSetRef ref value =
+    getStore
+        |> andThen
+            (\store ->
+                setStore (Store.setref ref value store)
+                    |> followedBy (succeed <| VRef ref)
+            )
 
 
-computeDeref : Ref -> Store -> ( Result RuntimeError Value, Store )
-computeDeref ref store =
-    ( case Store.deref ref store of
-        Just value ->
-            Ok value
-
-        Nothing ->
-            Err <| ReferenceNotFound ref
-    , store
-    )
-
-
-computeSetRef : Ref -> Value -> Store -> ( Result RuntimeError Value, Store )
-computeSetRef ref value store =
-    ( Ok <| VRef ref
-    , Store.setref ref value store
-    )
-
-
-toProcedure : Value -> Store -> ( Result RuntimeError Procedure, Store )
-toProcedure v store =
+toProcedure : Value -> Eval Procedure
+toProcedure v =
     case v of
         VProcedure f ->
-            ( Ok f
-            , store
-            )
+            succeed f
 
         _ ->
-            ( Err <|
+            fail <|
                 TypeError
                     { expected = [ TProcedure ]
                     , actual = [ typeOf v ]
                     }
-            , store
-            )
 
 
-toRef : Value -> Store -> ( Result RuntimeError Ref, Store )
-toRef v store =
-    ( case v of
+toRef : Value -> Eval Ref
+toRef v =
+    case v of
         VRef ref ->
-            Ok ref
+            succeed ref
 
         _ ->
-            Err <|
+            fail <|
                 TypeError
                     { expected = [ TRef ]
                     , actual = [ typeOf v ]
                     }
-    , store
-    )
 
 
 typeOf : Value -> Type
@@ -292,14 +287,81 @@ typeOf v =
             TRef
 
 
-andThen :
-    (a -> Store -> ( Result RuntimeError b, Store ))
-    -> ( Result RuntimeError a, Store )
-    -> ( Result RuntimeError b, Store )
-andThen f ( resultA, store ) =
-    case resultA of
-        Ok a ->
-            f a store
 
-        Err e ->
-            ( Err e, store )
+-- EVAL
+
+
+type alias Eval a =
+    Store -> ( Result RuntimeError a, Store )
+
+
+succeed : a -> Eval a
+succeed a =
+    \store0 ->
+        ( Ok a
+        , store0
+        )
+
+
+fail : RuntimeError -> Eval a
+fail e =
+    \store0 ->
+        ( Err e
+        , store0
+        )
+
+
+getStore : Eval Store
+getStore =
+    \store0 ->
+        ( Ok store0
+        , store0
+        )
+
+
+setStore : Store -> Eval ()
+setStore newStore =
+    \_ ->
+        ( Ok ()
+        , newStore
+        )
+
+
+map : (a -> b) -> Eval a -> Eval b
+map f evalA =
+    \store0 ->
+        let
+            ( resultA, store1 ) =
+                evalA store0
+        in
+        case resultA of
+            Ok a ->
+                ( Ok <| f a, store1 )
+
+            Err e ->
+                ( Err e, store1 )
+
+
+andThen : (a -> Eval b) -> Eval a -> Eval b
+andThen f evalA =
+    \store0 ->
+        let
+            ( resultA, store1 ) =
+                evalA store0
+        in
+        case resultA of
+            Ok a ->
+                let
+                    evalB =
+                        f a
+                in
+                evalB store1
+
+            Err e ->
+                ( Err e, store1 )
+
+
+followedBy : Eval b -> Eval a -> Eval b
+followedBy evalB evalA =
+    evalA
+        |> andThen (\_ -> evalB)
