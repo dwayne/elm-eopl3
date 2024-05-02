@@ -216,6 +216,12 @@ suite =
                 """
               , VNumber 12
               )
+            , ( """
+                let x = deref(newref(5))
+                in x
+                """
+              , VNumber 5
+              )
             ]
 
 

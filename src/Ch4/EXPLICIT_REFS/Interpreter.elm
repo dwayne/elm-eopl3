@@ -39,6 +39,7 @@ type Error
 
 type RuntimeError
     = IdentifierNotFound Id
+    | ReferenceNotFound Ref
     | TypeError
         { expected : List Type
         , actual : List Type
@@ -150,8 +151,10 @@ evalExpr expr env store0 =
             evalExpr e env store0
                 |> andThen computeNewref
 
-        Deref _ ->
-            Debug.todo "Implement deref"
+        Deref e ->
+            evalExpr e env store0
+                |> andThen toRef
+                |> andThen computeDeref
 
         Setref _ _ ->
             Debug.todo "Implement setref"
@@ -240,6 +243,34 @@ computeNewref : Value -> Store -> ( Result RuntimeError Value, Store )
 computeNewref value store =
     Store.newref value store
         |> Tuple.mapFirst (Ok << VRef)
+
+
+toRef : Value -> Store -> ( Result RuntimeError Ref, Store )
+toRef v store =
+    ( case v of
+        VRef ref ->
+            Ok ref
+
+        _ ->
+            Err <|
+                TypeError
+                    { expected = [ TRef ]
+                    , actual = [ typeOf v ]
+                    }
+    , store
+    )
+
+
+computeDeref : Ref -> Store -> ( Result RuntimeError Value, Store )
+computeDeref ref store =
+    ( case Store.deref ref store of
+        Just v ->
+            Ok v
+
+        Nothing ->
+            Err <| ReferenceNotFound ref
+    , store
+    )
 
 
 typeOf : Value -> Type

@@ -33,6 +33,8 @@ expr =
         , procExpr
         , letrecExpr
         , callExpr
+        , newrefExpr
+        , derefExpr
         , constExpr
         , varExpr
         ]
@@ -119,6 +121,24 @@ callExpr =
         |. L.symbol ")"
 
 
+newrefExpr : Parser Expr
+newrefExpr =
+    P.succeed Newref
+        |. L.keyword "newref"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+derefExpr : Parser Expr
+derefExpr =
+    P.succeed Deref
+        |. L.keyword "deref"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -141,11 +161,13 @@ id =
         , inner = Char.isLower
         , reserved =
             Set.fromList
-                [ "else"
+                [ "deref"
+                , "else"
                 , "if"
                 , "in"
                 , "let"
                 , "letrec"
+                , "newref"
                 , "proc"
                 , "then"
                 , "zero?"
