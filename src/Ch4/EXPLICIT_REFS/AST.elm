@@ -24,6 +24,7 @@ type Expr
     | Newref Expr
     | Deref Expr
     | Setref Expr Expr
+    | Begin Expr (List Expr)
 
 
 type alias Procrec =

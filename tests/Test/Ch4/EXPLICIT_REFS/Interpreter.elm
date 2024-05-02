@@ -234,6 +234,17 @@ suite =
                 """
               , VNumber 10
               )
+            , ( """
+                let
+                  x = newref(5)
+                in
+                begin
+                  setref(x, 10);
+                  deref(x)
+                end
+                """
+              , VNumber 10
+              )
             ]
 
 

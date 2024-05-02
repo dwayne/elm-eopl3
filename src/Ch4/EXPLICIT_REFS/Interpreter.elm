@@ -44,6 +44,7 @@ type RuntimeError
         { expected : List Type
         , actual : List Type
         }
+    | UnexpectedError String
 
 
 run : String -> Result Error Value
@@ -153,6 +154,9 @@ evalExpr expr env =
                             |> andThen (computeSetRef ref)
                     )
 
+        Begin firstExpr restExprs ->
+            evalExprs (firstExpr :: restExprs) env
+
 
 computeDiff : Value -> Value -> Eval Value
 computeDiff va vb =
@@ -241,6 +245,24 @@ computeSetRef ref value =
                 setStore (Store.setref ref value store)
                     |> followedBy (succeed <| VRef ref)
             )
+
+
+evalExprs : List Expr -> Env -> Eval Value
+evalExprs exprs env =
+    case exprs of
+        [ expr ] ->
+            evalExpr expr env
+
+        expr :: restExprs ->
+            evalExpr expr env
+                |> followedBy (evalExprs restExprs env)
+
+        [] ->
+            --
+            -- N.B. This should NEVER happen since the parser
+            --      expects begin to have at least one expression.
+            --
+            fail <| UnexpectedError "begin has no expressions"
 
 
 toProcedure : Value -> Eval Procedure

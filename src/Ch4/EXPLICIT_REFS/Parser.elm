@@ -36,6 +36,7 @@ expr =
         , newrefExpr
         , derefExpr
         , setrefExpr
+        , beginExpr
         , constExpr
         , varExpr
         ]
@@ -151,6 +152,19 @@ setrefExpr =
         |. L.symbol ")"
 
 
+beginExpr : Parser Expr
+beginExpr =
+    P.succeed Begin
+        |. L.keyword "begin"
+        |= P.lazy (\_ -> expr)
+        |= many
+            (P.succeed identity
+                |. L.symbol ";"
+                |= P.lazy (\_ -> expr)
+            )
+        |. L.keyword "end"
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -173,14 +187,17 @@ id =
         , inner = Char.isLower
         , reserved =
             Set.fromList
-                [ "deref"
+                [ "begin"
+                , "deref"
                 , "else"
+                , "end"
                 , "if"
                 , "in"
                 , "let"
                 , "letrec"
                 , "newref"
                 , "proc"
+                , "setref"
                 , "then"
                 , "zero?"
                 ]

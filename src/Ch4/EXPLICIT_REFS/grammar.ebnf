@@ -12,6 +12,7 @@ Expr    ::= Const
           | Newref
           | Deref
           | Setref
+          | Begin
 
 Const   ::= Number
 Var     ::= Id
@@ -26,6 +27,8 @@ Call    ::= '(' Expr Expr ')'
 Newref  ::= 'newref' '(' Expr ')'
 Deref   ::= 'deref' '(' Expr ')'
 Setref  ::= 'setref' '(' Expr ',' Expr ')'
+
+Begin   ::= 'begin' Expr { ';' Expr  }* 'end'
 
 Number  ::= [0-9]+
 Id      ::= [a-z]+
