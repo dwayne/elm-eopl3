@@ -95,33 +95,30 @@ evalExpr expr env store0 =
         Diff a b ->
             evalExpr a env store0
                 |> andThen
-                    (\va store1 ->
-                        evalExpr b env store1
-                            |> andThen
-                                (\vb store2 ->
-                                    computeDiff va vb store2
+                    (\va ->
+                        evalExpr b env
+                            >> andThen
+                                (\vb ->
+                                    computeDiff va vb
                                 )
                     )
 
         Zero a ->
             evalExpr a env store0
-                |> andThen
-                    (\va store1 ->
-                        computeIsZero va store1
-                    )
+                |> andThen computeIsZero
 
         If test consequent alternative ->
             evalExpr test env store0
                 |> andThen
-                    (\vTest store1 ->
-                        computeIf vTest consequent alternative env store1
+                    (\vTest ->
+                        computeIf vTest consequent alternative env
                     )
 
         Let name e body ->
             evalExpr e env store0
                 |> andThen
-                    (\ve store1 ->
-                        evalExpr body (Env.extend name ve env) store1
+                    (\ve ->
+                        evalExpr body (Env.extend name ve env)
                     )
 
         Proc param body ->
@@ -135,15 +132,12 @@ evalExpr expr env store0 =
         Call rator rand ->
             evalExpr rator env store0
                 |> andThen
-                    (\vRator store1 ->
-                        toProcedure vRator store1
-                            |> andThen
-                                (\f store2 ->
-                                    evalExpr rand env store2
-                                        |> andThen
-                                            (\arg store3 ->
-                                                applyProcedure f arg store3
-                                            )
+                    (\vRator ->
+                        toProcedure vRator
+                            >> andThen
+                                (\f ->
+                                    evalExpr rand env
+                                        >> andThen (applyProcedure f)
                                 )
                     )
 
@@ -168,38 +162,34 @@ evalExpr expr env store0 =
 
 computeDiff : Value -> Value -> Store -> ( Result RuntimeError Value, Store )
 computeDiff va vb store =
-    case ( va, vb ) of
+    ( case ( va, vb ) of
         ( VNumber a, VNumber b ) ->
-            ( Ok <| VNumber <| a - b
-            , store
-            )
+            Ok <| VNumber <| a - b
 
         _ ->
-            ( Err <|
+            Err <|
                 TypeError
                     { expected = [ TNumber, TNumber ]
                     , actual = [ typeOf va, typeOf vb ]
                     }
-            , store
-            )
+    , store
+    )
 
 
 computeIsZero : Value -> Store -> ( Result RuntimeError Value, Store )
 computeIsZero va store =
-    case va of
+    ( case va of
         VNumber n ->
-            ( Ok <| VBool <| n == 0
-            , store
-            )
+            Ok <| VBool <| n == 0
 
         _ ->
-            ( Err <|
+            Err <|
                 TypeError
                     { expected = [ TNumber ]
                     , actual = [ typeOf va ]
                     }
-            , store
-            )
+    , store
+    )
 
 
 computeIf : Value -> Expr -> Expr -> Env -> Store -> ( Result RuntimeError Value, Store )
@@ -222,6 +212,36 @@ computeIf vTest consequent alternative env store =
             )
 
 
+applyProcedure : Procedure -> Value -> Store -> ( Result RuntimeError Value, Store )
+applyProcedure (Closure param body savedEnv) value store =
+    evalExpr body (Env.extend param value savedEnv) store
+
+
+computeNewref : Value -> Store -> ( Result RuntimeError Value, Store )
+computeNewref value store =
+    Store.newref value store
+        |> Tuple.mapFirst (Ok << VRef)
+
+
+computeDeref : Ref -> Store -> ( Result RuntimeError Value, Store )
+computeDeref ref store =
+    ( case Store.deref ref store of
+        Just value ->
+            Ok value
+
+        Nothing ->
+            Err <| ReferenceNotFound ref
+    , store
+    )
+
+
+computeSetRef : Ref -> Value -> Store -> ( Result RuntimeError Value, Store )
+computeSetRef ref value store =
+    ( Ok <| VRef ref
+    , Store.setref ref value store
+    )
+
+
 toProcedure : Value -> Store -> ( Result RuntimeError Procedure, Store )
 toProcedure v store =
     case v of
@@ -238,36 +258,6 @@ toProcedure v store =
                     }
             , store
             )
-
-
-applyProcedure : Procedure -> Value -> Store -> ( Result RuntimeError Value, Store )
-applyProcedure (Closure param body savedEnv) value store =
-    evalExpr body (Env.extend param value savedEnv) store
-
-
-computeNewref : Value -> Store -> ( Result RuntimeError Value, Store )
-computeNewref value store =
-    Store.newref value store
-        |> Tuple.mapFirst (Ok << VRef)
-
-
-computeDeref : Ref -> Store -> ( Result RuntimeError Value, Store )
-computeDeref ref store =
-    ( case Store.deref ref store of
-        Just v ->
-            Ok v
-
-        Nothing ->
-            Err <| ReferenceNotFound ref
-    , store
-    )
-
-
-computeSetRef : Ref -> Value -> Store -> ( Result RuntimeError Value, Store )
-computeSetRef ref value store =
-    ( Ok <| VRef ref
-    , Store.setref ref value store
-    )
 
 
 toRef : Value -> Store -> ( Result RuntimeError Ref, Store )
