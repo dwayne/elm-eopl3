@@ -35,6 +35,7 @@ expr =
         , callExpr
         , newrefExpr
         , derefExpr
+        , setrefExpr
         , constExpr
         , varExpr
         ]
@@ -135,6 +136,17 @@ derefExpr =
     P.succeed Deref
         |. L.keyword "deref"
         |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+setrefExpr : Parser Expr
+setrefExpr =
+    P.succeed Setref
+        |. L.keyword "setref"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ","
         |= P.lazy (\_ -> expr)
         |. L.symbol ")"
 

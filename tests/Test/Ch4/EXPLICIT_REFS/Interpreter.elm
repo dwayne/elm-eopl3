@@ -222,6 +222,18 @@ suite =
                 """
               , VNumber 5
               )
+            , ( """
+                let x = newref(5)
+                in deref(x)
+                """
+              , VNumber 5
+              )
+            , ( """
+                let x = newref(5)
+                in deref(setref(x, 10))
+                """
+              , VNumber 10
+              )
             ]
 
 

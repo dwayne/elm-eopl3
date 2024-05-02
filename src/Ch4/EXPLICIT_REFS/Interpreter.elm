@@ -156,8 +156,14 @@ evalExpr expr env store0 =
                 |> andThen toRef
                 |> andThen computeDeref
 
-        Setref _ _ ->
-            Debug.todo "Implement setref"
+        Setref le re ->
+            evalExpr le env store0
+                |> andThen toRef
+                |> andThen
+                    (\ref ->
+                        evalExpr re env
+                            >> andThen (computeSetRef ref)
+                    )
 
 
 computeDiff : Value -> Value -> Store -> ( Result RuntimeError Value, Store )
@@ -245,6 +251,25 @@ computeNewref value store =
         |> Tuple.mapFirst (Ok << VRef)
 
 
+computeDeref : Ref -> Store -> ( Result RuntimeError Value, Store )
+computeDeref ref store =
+    ( case Store.deref ref store of
+        Just v ->
+            Ok v
+
+        Nothing ->
+            Err <| ReferenceNotFound ref
+    , store
+    )
+
+
+computeSetRef : Ref -> Value -> Store -> ( Result RuntimeError Value, Store )
+computeSetRef ref value store =
+    ( Ok <| VRef ref
+    , Store.setref ref value store
+    )
+
+
 toRef : Value -> Store -> ( Result RuntimeError Ref, Store )
 toRef v store =
     ( case v of
@@ -257,18 +282,6 @@ toRef v store =
                     { expected = [ TRef ]
                     , actual = [ typeOf v ]
                     }
-    , store
-    )
-
-
-computeDeref : Ref -> Store -> ( Result RuntimeError Value, Store )
-computeDeref ref store =
-    ( case Store.deref ref store of
-        Just v ->
-            Ok v
-
-        Nothing ->
-            Err <| ReferenceNotFound ref
     , store
     )
 
