@@ -1,8 +1,8 @@
 module Ch4.IMPLICIT_REFS.Interpreter exposing (Value(..), run)
 
-import Ch4.EXPLICIT_REFS.Env as Env
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch4.IMPLICIT_REFS.AST as AST exposing (..)
+import Ch4.IMPLICIT_REFS.Env as Env
 import Ch4.IMPLICIT_REFS.Parser as P
 
 
@@ -13,7 +13,7 @@ type Value
 
 
 type alias Env =
-    Env.Env Id Ref Expr
+    Env.Env Id Expr
 
 
 type alias Store =
@@ -96,7 +96,39 @@ evalExpr expr env =
             succeed <| VNumber n
 
         Var name ->
-            Debug.todo "Implement variable reference"
+            getStore
+                |> andThen
+                    (\store0 ->
+                        let
+                            findOptions =
+                                { needle = name
+                                , toClosure = toClosure
+                                , store0 = store0
+                                }
+                        in
+                        case Env.find findOptions env of
+                            Just (Env.Ref ref) ->
+                                case Store.deref ref store0 of
+                                    Just value ->
+                                        succeed value
+
+                                    Nothing ->
+                                        fail <| IdentifierNotFound name
+
+                            Just (Env.Procedure ref store1) ->
+                                setStore store1
+                                    |> followedBy
+                                        (case Store.deref ref store1 of
+                                            Just value ->
+                                                succeed value
+
+                                            Nothing ->
+                                                fail <| IdentifierNotFound name
+                                        )
+
+                            Nothing ->
+                                fail <| IdentifierNotFound name
+                    )
 
         Diff a b ->
             evalExpr a env
@@ -121,13 +153,26 @@ evalExpr expr env =
                     )
 
         Let name e body ->
-            Debug.todo "Implement let"
+            evalExpr e env
+                |> andThen
+                    (\ve ->
+                        getStore
+                            |> andThen
+                                (\store0 ->
+                                    let
+                                        ( ref, store1 ) =
+                                            Store.newref ve store0
+                                    in
+                                    setStore store1
+                                        |> followedBy (evalExpr body (Env.extend name ref env))
+                                )
+                    )
 
         Proc param body ->
             succeed <| VProcedure <| Closure param body env
 
         Letrec procrecs letrecBody ->
-            Debug.todo "Implement letrec"
+            evalExpr letrecBody (Env.extendRec procrecs env)
 
         Call rator rand ->
             evalExpr rator env
@@ -142,7 +187,41 @@ evalExpr expr env =
                     )
 
         Set name e ->
-            Debug.todo "Implement set"
+            evalExpr e env
+                |> andThen
+                    (\ve ->
+                        getStore
+                            |> andThen
+                                (\store0 ->
+                                    let
+                                        findOptions =
+                                            { needle = name
+                                            , toClosure = toClosure
+                                            , store0 = store0
+                                            }
+                                    in
+                                    case Env.find findOptions env of
+                                        Just (Env.Ref ref) ->
+                                            succeed ref
+
+                                        Just (Env.Procedure ref store1) ->
+                                            setStore store1
+                                                |> followedBy (succeed ref)
+
+                                        Nothing ->
+                                            fail <| IdentifierNotFound name
+                                )
+                            |> andThen
+                                (\ref ->
+                                    getStore
+                                        |> andThen
+                                            (\store0 ->
+                                                Store.setref ref ve store0
+                                                    |> setStore
+                                                    |> followedBy (succeed <| VNumber 27)
+                                            )
+                                )
+                    )
 
         Begin firstExpr restExprs ->
             evalExprs (firstExpr :: restExprs) env
@@ -196,7 +275,16 @@ evalIf vTest consequent alternative env =
 
 applyProcedure : Procedure -> Value -> Eval Value
 applyProcedure (Closure param body savedEnv) value =
-    Debug.todo "Implement applyProcedure"
+    getStore
+        |> andThen
+            (\store0 ->
+                let
+                    ( ref, store1 ) =
+                        Store.newref value store0
+                in
+                setStore store1
+                    |> followedBy (evalExpr body <| Env.extend param ref savedEnv)
+            )
 
 
 evalExprs : List Expr -> Env -> Eval Value
@@ -215,6 +303,11 @@ evalExprs exprs env =
             --      expects begin to have at least one expression.
             --
             fail <| UnexpectedError "begin has no expressions"
+
+
+toClosure : Id -> Expr -> Env -> Value
+toClosure param body savedEnv =
+    VProcedure <| Closure param body savedEnv
 
 
 toProcedure : Value -> Eval Procedure
