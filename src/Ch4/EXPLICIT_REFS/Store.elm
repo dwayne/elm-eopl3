@@ -4,6 +4,7 @@ module Ch4.EXPLICIT_REFS.Store exposing
     , deref
     , empty
     , newref
+    , refToString
     , setref
     )
 
@@ -51,3 +52,8 @@ setref (Ref r) newValue (Store locations) =
                     previousValue
             )
             locations
+
+
+refToString : Ref -> String
+refToString (Ref r) =
+    "Ref " ++ String.fromInt r
