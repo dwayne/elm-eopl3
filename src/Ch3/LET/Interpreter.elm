@@ -39,8 +39,8 @@ run input =
             evalProgram program
                 |> Result.mapError RuntimeError
 
-        Err e ->
-            Err <| SyntaxError e
+        Err err ->
+            Err <| SyntaxError err
 
 
 evalProgram : AST.Program -> Result RuntimeError Value
@@ -77,7 +77,7 @@ evalExpr expr env =
                         evalExpr b env
                             |> Result.andThen
                                 (\vb ->
-                                    computeDiff va vb
+                                    evalDiff va vb
                                 )
                     )
 
@@ -85,14 +85,14 @@ evalExpr expr env =
             evalExpr a env
                 |> Result.andThen
                     (\va ->
-                        computeIsZero va
+                        evalZero va
                     )
 
         If test consequent alternative ->
             evalExpr test env
                 |> Result.andThen
                     (\vTest ->
-                        computeIf vTest consequent alternative env
+                        evalIf vTest consequent alternative env
                     )
 
         Let name e body ->
@@ -103,8 +103,8 @@ evalExpr expr env =
                     )
 
 
-computeDiff : Value -> Value -> Result RuntimeError Value
-computeDiff va vb =
+evalDiff : Value -> Value -> Result RuntimeError Value
+evalDiff va vb =
     case ( va, vb ) of
         ( VNumber a, VNumber b ) ->
             Ok <| VNumber <| a - b
@@ -117,8 +117,8 @@ computeDiff va vb =
                     }
 
 
-computeIsZero : Value -> Result RuntimeError Value
-computeIsZero va =
+evalZero : Value -> Result RuntimeError Value
+evalZero va =
     case va of
         VNumber n ->
             Ok <| VBool <| n == 0
@@ -131,8 +131,8 @@ computeIsZero va =
                     }
 
 
-computeIf : Value -> Expr -> Expr -> Env -> Result RuntimeError Value
-computeIf vTest consequent alternative env =
+evalIf : Value -> Expr -> Expr -> Env -> Result RuntimeError Value
+evalIf vTest consequent alternative env =
     case vTest of
         VBool b ->
             if b then

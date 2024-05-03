@@ -54,14 +54,14 @@ run input =
             evalProgram program
                 |> Result.mapError RuntimeError
 
-        Err e ->
-            Err <| SyntaxError e
+        Err err ->
+            Err <| SyntaxError err
 
 
 evalProgram : AST.Program -> Result RuntimeError Value
 evalProgram (Program expr) =
-    evalExpr expr initEnv Store.empty
-        |> Tuple.first
+    evalExpr expr initEnv
+        |> runEval Store.empty
 
 
 initEnv : Env
@@ -96,19 +96,19 @@ evalExpr expr env =
                         evalExpr b env
                             |> andThen
                                 (\vb ->
-                                    computeDiff va vb
+                                    evalDiff va vb
                                 )
                     )
 
         Zero a ->
             evalExpr a env
-                |> andThen computeIsZero
+                |> andThen evalZero
 
         If test consequent alternative ->
             evalExpr test env
                 |> andThen
                     (\vTest ->
-                        computeIf vTest consequent alternative env
+                        evalIf vTest consequent alternative env
                     )
 
         Let name e body ->
@@ -138,28 +138,28 @@ evalExpr expr env =
 
         Newref e ->
             evalExpr e env
-                |> andThen computeNewref
+                |> andThen evalNewref
 
         Deref e ->
             evalExpr e env
                 |> andThen toRef
-                |> andThen computeDeref
+                |> andThen evalDeref
 
-        Setref le re ->
-            evalExpr le env
+        Setref leftExpr rightExpr ->
+            evalExpr leftExpr env
                 |> andThen toRef
                 |> andThen
                     (\ref ->
-                        evalExpr re env
-                            |> andThen (computeSetRef ref)
+                        evalExpr rightExpr env
+                            |> andThen (evalSetref ref)
                     )
 
         Begin firstExpr restExprs ->
             evalExprs (firstExpr :: restExprs) env
 
 
-computeDiff : Value -> Value -> Eval Value
-computeDiff va vb =
+evalDiff : Value -> Value -> Eval Value
+evalDiff va vb =
     case ( va, vb ) of
         ( VNumber a, VNumber b ) ->
             succeed <| VNumber <| a - b
@@ -172,8 +172,8 @@ computeDiff va vb =
                     }
 
 
-computeIsZero : Value -> Eval Value
-computeIsZero va =
+evalZero : Value -> Eval Value
+evalZero va =
     case va of
         VNumber n ->
             succeed <| VBool <| n == 0
@@ -186,8 +186,8 @@ computeIsZero va =
                     }
 
 
-computeIf : Value -> Expr -> Expr -> Env -> Eval Value
-computeIf vTest consequent alternative env =
+evalIf : Value -> Expr -> Expr -> Env -> Eval Value
+evalIf vTest consequent alternative env =
     case vTest of
         VBool b ->
             if b then
@@ -209,8 +209,8 @@ applyProcedure (Closure param body savedEnv) value =
     evalExpr body (Env.extend param value savedEnv)
 
 
-computeNewref : Value -> Eval Value
-computeNewref value =
+evalNewref : Value -> Eval Value
+evalNewref value =
     getStore
         |> andThen
             (\store0 ->
@@ -223,8 +223,8 @@ computeNewref value =
             )
 
 
-computeDeref : Ref -> Eval Value
-computeDeref ref =
+evalDeref : Ref -> Eval Value
+evalDeref ref =
     getStore
         |> andThen
             (\store ->
@@ -237,8 +237,8 @@ computeDeref ref =
             )
 
 
-computeSetRef : Ref -> Value -> Eval Value
-computeSetRef ref value =
+evalSetref : Ref -> Value -> Eval Value
+evalSetref ref value =
     getStore
         |> andThen
             (\store ->
@@ -317,6 +317,11 @@ type alias Eval a =
     Store -> ( Result RuntimeError a, Store )
 
 
+runEval : Store -> Eval a -> Result RuntimeError a
+runEval store eval =
+    Tuple.first <| eval store
+
+
 succeed : a -> Eval a
 succeed a =
     \store0 ->
@@ -326,9 +331,9 @@ succeed a =
 
 
 fail : RuntimeError -> Eval a
-fail e =
+fail err =
     \store0 ->
-        ( Err e
+        ( Err err
         , store0
         )
 
@@ -360,8 +365,8 @@ map f evalA =
             Ok a ->
                 ( Ok <| f a, store1 )
 
-            Err e ->
-                ( Err e, store1 )
+            Err err ->
+                ( Err err, store1 )
 
 
 andThen : (a -> Eval b) -> Eval a -> Eval b
@@ -379,8 +384,8 @@ andThen f evalA =
                 in
                 evalB store1
 
-            Err e ->
-                ( Err e, store1 )
+            Err err ->
+                ( Err err, store1 )
 
 
 followedBy : Eval b -> Eval a -> Eval b
