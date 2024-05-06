@@ -170,16 +170,8 @@ evalExpr expr env =
                         evalExpr e2 env
                             |> andThen
                                 (\ve2 ->
-                                    getStore
-                                        |> andThen
-                                            (\store0 ->
-                                                let
-                                                    ( p, store1 ) =
-                                                        MutPair.new ve1 ve2 store0
-                                                in
-                                                setStore store1
-                                                    |> followedBy (succeed <| VMutPair p)
-                                            )
+                                    newpair ve1 ve2
+                                        |> map VMutPair
                                 )
                     )
 
@@ -188,22 +180,7 @@ evalExpr expr env =
                 |> andThen
                     (\ve ->
                         toMutPair ve
-                            |> andThen
-                                (\p ->
-                                    getStore
-                                        |> andThen
-                                            (\store ->
-                                                case MutPair.left store p of
-                                                    Just v ->
-                                                        succeed v
-
-                                                    Nothing ->
-                                                        fail <|
-                                                            UnexpectedError <|
-                                                                "Unable to get the left value of the mutable pair: "
-                                                                    ++ MutPair.toString p
-                                            )
-                                )
+                            |> andThen left
                     )
 
         Right e ->
@@ -211,44 +188,21 @@ evalExpr expr env =
                 |> andThen
                     (\ve ->
                         toMutPair ve
-                            |> andThen
-                                (\p ->
-                                    getStore
-                                        |> andThen
-                                            (\store ->
-                                                case MutPair.right store p of
-                                                    Just v ->
-                                                        succeed v
-
-                                                    Nothing ->
-                                                        fail <|
-                                                            UnexpectedError <|
-                                                                "Unable to get the right value of the mutable pair: "
-                                                                    ++ MutPair.toString p
-                                            )
-                                )
+                            |> andThen right
                     )
 
         Setleft e1 e2 ->
             evalExpr e1 env
                 |> andThen
                     (\ve1 ->
-                        evalExpr e2 env
+                        toMutPair ve1
                             |> andThen
-                                (\ve2 ->
-                                    toMutPair ve1
+                                (\p ->
+                                    evalExpr e2 env
                                         |> andThen
-                                            (\p ->
-                                                getStore
-                                                    |> andThen
-                                                        (\store0 ->
-                                                            let
-                                                                store1 =
-                                                                    MutPair.setLeft ve2 store0 p
-                                                            in
-                                                            setStore store1
-                                                                |> followedBy unit
-                                                        )
+                                            (\ve2 ->
+                                                setLeft ve2 p
+                                                    |> followedBy unit
                                             )
                                 )
                     )
@@ -257,22 +211,14 @@ evalExpr expr env =
             evalExpr e1 env
                 |> andThen
                     (\ve1 ->
-                        evalExpr e2 env
+                        toMutPair ve1
                             |> andThen
-                                (\ve2 ->
-                                    toMutPair ve1
+                                (\p ->
+                                    evalExpr e2 env
                                         |> andThen
-                                            (\p ->
-                                                getStore
-                                                    |> andThen
-                                                        (\store0 ->
-                                                            let
-                                                                store1 =
-                                                                    MutPair.setRight ve2 store0 p
-                                                            in
-                                                            setStore store1
-                                                                |> followedBy unit
-                                                        )
+                                            (\ve2 ->
+                                                setRight ve2 p
+                                                    |> followedBy unit
                                             )
                                 )
                     )
@@ -396,6 +342,84 @@ typeOf v =
 
         VMutPair _ ->
             TMutPair
+
+
+
+-- MutPair
+
+
+newpair : Value -> Value -> Eval MutPair
+newpair a b =
+    getStore
+        |> andThen
+            (\store0 ->
+                let
+                    ( p, store1 ) =
+                        MutPair.new a b store0
+                in
+                setStore store1
+                    |> followedBy (succeed p)
+            )
+
+
+left : MutPair -> Eval Value
+left p =
+    getStore
+        |> andThen
+            (\store ->
+                case MutPair.left store p of
+                    Just v ->
+                        succeed v
+
+                    Nothing ->
+                        fail <|
+                            UnexpectedError <|
+                                "Unable to get the left value of the mutable pair: "
+                                    ++ MutPair.toString p
+            )
+
+
+right : MutPair -> Eval Value
+right p =
+    getStore
+        |> andThen
+            (\store ->
+                case MutPair.right store p of
+                    Just v ->
+                        succeed v
+
+                    Nothing ->
+                        fail <|
+                            UnexpectedError <|
+                                "Unable to get the right value of the mutable pair: "
+                                    ++ MutPair.toString p
+            )
+
+
+setLeft : Value -> MutPair -> Eval ()
+setLeft a p =
+    getStore
+        |> andThen
+            (\store0 ->
+                let
+                    store1 =
+                        MutPair.setLeft a store0 p
+                in
+                setStore store1
+            )
+
+
+setRight : Value -> MutPair -> Eval ()
+setRight a p =
+    getStore
+        |> andThen
+            (\store0 ->
+                let
+                    store1 =
+                        MutPair.setRight a store0 p
+                in
+                setStore store1
+            )
 
 
 
