@@ -1,12 +1,12 @@
 module Ch4.MUTABLE_PAIRS.MutPair exposing
     ( MutPair
-    , new
     , left
+    , new
     , right
     , setLeft
     , setRight
+    , toString
     )
-
 
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref, Store)
 
@@ -47,3 +47,8 @@ setLeft leftValue store (MutPair leftRef _) =
 setRight : a -> Store a -> MutPair -> Store a
 setRight rightValue store (MutPair _ rightRef) =
     Store.setref rightRef rightValue store
+
+
+toString : MutPair -> String
+toString (MutPair leftRef rightRef) =
+    "MutPair (" ++ Store.refToString leftRef ++ ") (" ++ Store.refToString rightRef ++ ")"

@@ -1,8 +1,9 @@
 module Ch4.MUTABLE_PAIRS.Interpreter exposing (Value(..), run)
 
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
-import Ch4.MUTABLE_PAIRS.AST as AST exposing (..)
 import Ch4.IMPLICIT_REFS.Env as Env
+import Ch4.MUTABLE_PAIRS.AST as AST exposing (..)
+import Ch4.MUTABLE_PAIRS.MutPair as MutPair exposing (MutPair)
 import Ch4.MUTABLE_PAIRS.Parser as P
 
 
@@ -11,6 +12,7 @@ type Value
     | VNumber Number
     | VBool Bool
     | VProcedure Procedure
+    | VMutPair MutPair
 
 
 type alias Env =
@@ -30,6 +32,7 @@ type Type
     | TNumber
     | TBool
     | TProcedure
+    | TMutPair
 
 
 type Error
@@ -161,19 +164,118 @@ evalExpr expr env =
             evalExprs (firstExpr :: restExprs) env
 
         Newpair e1 e2 ->
-            Debug.todo "Evaluate Newpair"
+            evalExpr e1 env
+                |> andThen
+                    (\ve1 ->
+                        evalExpr e2 env
+                            |> andThen
+                                (\ve2 ->
+                                    getStore
+                                        |> andThen
+                                            (\store0 ->
+                                                let
+                                                    ( p, store1 ) =
+                                                        MutPair.new ve1 ve2 store0
+                                                in
+                                                setStore store1
+                                                    |> followedBy (succeed <| VMutPair p)
+                                            )
+                                )
+                    )
 
         Left e ->
-            Debug.todo "Evaluate Left"
+            evalExpr e env
+                |> andThen
+                    (\ve ->
+                        toMutPair ve
+                            |> andThen
+                                (\p ->
+                                    getStore
+                                        |> andThen
+                                            (\store ->
+                                                case MutPair.left store p of
+                                                    Just v ->
+                                                        succeed v
+
+                                                    Nothing ->
+                                                        fail <|
+                                                            UnexpectedError <|
+                                                                "Unable to get the left value of the mutable pair: "
+                                                                    ++ MutPair.toString p
+                                            )
+                                )
+                    )
 
         Right e ->
-            Debug.todo "Evaluate Right"
+            evalExpr e env
+                |> andThen
+                    (\ve ->
+                        toMutPair ve
+                            |> andThen
+                                (\p ->
+                                    getStore
+                                        |> andThen
+                                            (\store ->
+                                                case MutPair.right store p of
+                                                    Just v ->
+                                                        succeed v
+
+                                                    Nothing ->
+                                                        fail <|
+                                                            UnexpectedError <|
+                                                                "Unable to get the right value of the mutable pair: "
+                                                                    ++ MutPair.toString p
+                                            )
+                                )
+                    )
 
         Setleft e1 e2 ->
-            Debug.todo "Evaluate Setleft"
+            evalExpr e1 env
+                |> andThen
+                    (\ve1 ->
+                        evalExpr e2 env
+                            |> andThen
+                                (\ve2 ->
+                                    toMutPair ve1
+                                        |> andThen
+                                            (\p ->
+                                                getStore
+                                                    |> andThen
+                                                        (\store0 ->
+                                                            let
+                                                                store1 =
+                                                                    MutPair.setLeft ve2 store0 p
+                                                            in
+                                                            setStore store1
+                                                                |> followedBy unit
+                                                        )
+                                            )
+                                )
+                    )
 
         Setright e1 e2 ->
-            Debug.todo "Evaluate Setright"
+            evalExpr e1 env
+                |> andThen
+                    (\ve1 ->
+                        evalExpr e2 env
+                            |> andThen
+                                (\ve2 ->
+                                    toMutPair ve1
+                                        |> andThen
+                                            (\p ->
+                                                getStore
+                                                    |> andThen
+                                                        (\store0 ->
+                                                            let
+                                                                store1 =
+                                                                    MutPair.setRight ve2 store0 p
+                                                            in
+                                                            setStore store1
+                                                                |> followedBy unit
+                                                        )
+                                            )
+                                )
+                    )
 
 
 evalDiff : Value -> Value -> Eval Value
@@ -263,6 +365,20 @@ toProcedure v =
                     }
 
 
+toMutPair : Value -> Eval MutPair
+toMutPair v =
+    case v of
+        VMutPair p ->
+            succeed p
+
+        _ ->
+            fail <|
+                TypeError
+                    { expected = [ TMutPair ]
+                    , actual = [ typeOf v ]
+                    }
+
+
 typeOf : Value -> Type
 typeOf v =
     case v of
@@ -277,6 +393,9 @@ typeOf v =
 
         VProcedure _ ->
             TProcedure
+
+        VMutPair _ ->
+            TMutPair
 
 
 
