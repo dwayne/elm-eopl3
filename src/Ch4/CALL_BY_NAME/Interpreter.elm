@@ -26,8 +26,12 @@ type
     --
     -- A denoted value.
     --
-    = Value Value
-    | Thunk Expr Env
+    = DValue Value
+    | DThunk Thunk
+
+
+type Thunk
+    = Thunk Expr Env
 
 
 type alias Store =
@@ -88,13 +92,13 @@ initState =
             Store.empty
 
         ( xRef, store1 ) =
-            Store.newref (Value <| VNumber 10) store0
+            Store.newref (DValue <| VNumber 10) store0
 
         ( vRef, store2 ) =
-            Store.newref (Value <| VNumber 5) store1
+            Store.newref (DValue <| VNumber 5) store1
 
         ( iRef, store3 ) =
-            Store.newref (Value <| VNumber 1) store2
+            Store.newref (DValue <| VNumber 1) store2
     in
     ( Env.empty
         |> Env.extend "x" xRef
@@ -116,10 +120,10 @@ evalExpr expr env =
                 |> andThen
                     (\dValue ->
                         case dValue of
-                            Value v ->
+                            DValue v ->
                                 succeed v
 
-                            Thunk e savedEnv ->
+                            DThunk (Thunk e savedEnv) ->
                                 --
                                 -- 2. The operand is thawed.
                                 --
@@ -150,7 +154,7 @@ evalExpr expr env =
 
         Let name e body ->
             evalExpr e env
-                |> andThen (Value >> newref)
+                |> andThen (DValue >> newref)
                 |> andThen
                     (\ref ->
                         evalExpr body (Env.extend name ref env)
@@ -179,7 +183,7 @@ evalExpr expr env =
                 |> andThen
                     (\ve ->
                         find name env
-                            |> andThen (setref <| Value ve)
+                            |> andThen (setref <| DValue ve)
                     )
 
         Begin firstExpr restExprs ->
@@ -249,7 +253,7 @@ evalOperand expr env =
             --
             -- 1. The operand is frozen.
             --
-            newref <| Thunk expr env
+            newref <| DThunk <| Thunk expr env
 
 
 applyProcedure : Procedure -> Ref -> Eval Value
@@ -336,7 +340,7 @@ find name env =
 
 toClosure : Id -> Expr -> Env -> DValue
 toClosure param body savedEnv =
-    Value <| VProcedure <| Closure param body savedEnv
+    DValue <| VProcedure <| Closure param body savedEnv
 
 
 
