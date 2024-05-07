@@ -116,18 +116,34 @@ evalExpr expr env =
 
         Var name ->
             find name env
-                |> andThen deref
                 |> andThen
-                    (\dValue ->
-                        case dValue of
-                            DValue v ->
-                                succeed v
+                    (\ref ->
+                        deref ref
+                            |> andThen
+                                (\dValue ->
+                                    case dValue of
+                                        DValue v ->
+                                            succeed v
 
-                            DThunk (Thunk e savedEnv) ->
-                                --
-                                -- 2. The operand is thawed.
-                                --
-                                evalExpr e savedEnv
+                                        DThunk (Thunk e savedEnv) ->
+                                            --
+                                            -- 2. The operand is thawed.
+                                            --
+                                            evalExpr e savedEnv
+                                                |> andThen
+                                                    (\v ->
+                                                        --
+                                                        -- 3. Save the expressed value of the thunk
+                                                        --    in the same location, so that the thunk
+                                                        --    will not be evaluated again.
+                                                        --
+                                                        --    This is an instance of a general strategy
+                                                        --    called memoization.
+                                                        --
+                                                        setref (DValue v) ref
+                                                            |> followedBy (succeed v)
+                                                    )
+                                )
                     )
 
         Diff a b ->
