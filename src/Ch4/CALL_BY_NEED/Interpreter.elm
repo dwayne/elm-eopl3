@@ -140,7 +140,7 @@ evalExpr expr env =
                                                         --    This is an instance of a general strategy
                                                         --    called memoization.
                                                         --
-                                                        setref (DValue v) ref
+                                                        setref v ref
                                                             |> followedBy (succeed v)
                                                     )
                                 )
@@ -199,7 +199,8 @@ evalExpr expr env =
                 |> andThen
                     (\ve ->
                         find name env
-                            |> andThen (setref <| DValue ve)
+                            |> andThen (setref ve)
+                            |> followedBy (succeed VUnit)
                     )
 
         Begin firstExpr restExprs ->
@@ -391,16 +392,10 @@ deref ref =
             )
 
 
-setref : DValue -> Ref -> Eval Value
+setref : Value -> Ref -> Eval ()
 setref v ref =
     getStore
-        |> andThen (setStore << Store.setref ref v)
-        |> followedBy unit
-
-
-unit : Eval Value
-unit =
-    succeed VUnit
+        |> andThen (setStore << Store.setref ref (DValue v))
 
 
 
