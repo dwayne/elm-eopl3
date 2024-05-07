@@ -6,7 +6,11 @@ import Ch4.IMPLICIT_REFS.Env as Env
 import Ch4.IMPLICIT_REFS.Parser as P
 
 
-type Value
+type
+    Value
+    --
+    -- An expressed value.
+    --
     = VUnit
     | VNumber Number
     | VBool Bool
@@ -17,8 +21,17 @@ type alias Env =
     Env.Env Id Expr
 
 
+type
+    DValue
+    --
+    -- A denoted value.
+    --
+    = Value Value
+    | Thunk Expr Env
+
+
 type alias Store =
-    Store.Store Value
+    Store.Store DValue
 
 
 type Procedure
@@ -75,13 +88,13 @@ initState =
             Store.empty
 
         ( xRef, store1 ) =
-            Store.newref (VNumber 10) store0
+            Store.newref (Value <| VNumber 10) store0
 
         ( vRef, store2 ) =
-            Store.newref (VNumber 5) store1
+            Store.newref (Value <| VNumber 5) store1
 
         ( iRef, store3 ) =
-            Store.newref (VNumber 1) store2
+            Store.newref (Value <| VNumber 1) store2
     in
     ( Env.empty
         |> Env.extend "x" xRef
@@ -100,6 +113,18 @@ evalExpr expr env =
         Var name ->
             find name env
                 |> andThen deref
+                |> andThen
+                    (\dValue ->
+                        case dValue of
+                            Value v ->
+                                succeed v
+
+                            Thunk _ _ ->
+                                --
+                                -- TODO: Handle Thunk.
+                                --
+                                unit
+                    )
 
         Diff a b ->
             evalExpr a env
@@ -125,7 +150,7 @@ evalExpr expr env =
 
         Let name e body ->
             evalExpr e env
-                |> andThen newref
+                |> andThen (Value >> newref)
                 |> andThen
                     (\ref ->
                         evalExpr body (Env.extend name ref env)
@@ -154,7 +179,7 @@ evalExpr expr env =
                 |> andThen
                     (\ve ->
                         find name env
-                            |> andThen (setref ve)
+                            |> andThen (setref <| Value ve)
                     )
 
         Begin firstExpr restExprs ->
@@ -222,7 +247,7 @@ evalOperand expr env =
 
         _ ->
             evalExpr expr env
-                |> andThen newref
+                |> andThen (Value >> newref)
 
 
 applyProcedure : Procedure -> Ref -> Eval Value
@@ -307,16 +332,16 @@ find name env =
             )
 
 
-toClosure : Id -> Expr -> Env -> Value
+toClosure : Id -> Expr -> Env -> DValue
 toClosure param body savedEnv =
-    VProcedure <| Closure param body savedEnv
+    Value <| VProcedure <| Closure param body savedEnv
 
 
 
 -- STORE
 
 
-newref : Value -> Eval Ref
+newref : DValue -> Eval Ref
 newref v =
     getStore
         |> andThen
@@ -330,7 +355,7 @@ newref v =
             )
 
 
-deref : Ref -> Eval Value
+deref : Ref -> Eval DValue
 deref ref =
     getStore
         |> andThen
@@ -344,7 +369,7 @@ deref ref =
             )
 
 
-setref : Value -> Ref -> Eval Value
+setref : DValue -> Ref -> Eval Value
 setref v ref =
     getStore
         |> andThen (setStore << Store.setref ref v)
