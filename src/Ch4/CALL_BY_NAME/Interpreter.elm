@@ -119,11 +119,11 @@ evalExpr expr env =
                             Value v ->
                                 succeed v
 
-                            Thunk _ _ ->
+                            Thunk e savedEnv ->
                                 --
-                                -- TODO: Handle Thunk.
+                                -- 2. The operand is thawed.
                                 --
-                                unit
+                                evalExpr e savedEnv
                     )
 
         Diff a b ->
@@ -246,8 +246,10 @@ evalOperand expr env =
             find name env
 
         _ ->
-            evalExpr expr env
-                |> andThen (Value >> newref)
+            --
+            -- 1. The operand is frozen.
+            --
+            newref <| Thunk expr env
 
 
 applyProcedure : Procedure -> Ref -> Eval Value
