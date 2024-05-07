@@ -144,7 +144,7 @@ evalExpr expr env =
                         toProcedure vRator
                             |> andThen
                                 (\f ->
-                                    evalExpr rand env
+                                    evalOperand rand env
                                         |> andThen (applyProcedure f)
                                 )
                     )
@@ -207,13 +207,27 @@ evalIf vTest consequent alternative env =
                     }
 
 
-applyProcedure : Procedure -> Value -> Eval Value
-applyProcedure (Closure param body savedEnv) value =
-    newref value
-        |> andThen
-            (\ref ->
-                evalExpr body <| Env.extend param ref savedEnv
-            )
+evalOperand : Expr -> Env -> Eval Ref
+evalOperand expr env =
+    case expr of
+        Var name ->
+            --
+            -- This is the key change that changes how parameter-passing works.
+            --
+            -- Use the reference that the variable denotes. This gives us the
+            -- call-by-reference (CBR) instead of the call-by-value (CBV)
+            -- semantics.
+            --
+            find name env
+
+        _ ->
+            evalExpr expr env
+                |> andThen newref
+
+
+applyProcedure : Procedure -> Ref -> Eval Value
+applyProcedure (Closure param body savedEnv) ref =
+    evalExpr body <| Env.extend param ref savedEnv
 
 
 evalExprs : List Expr -> Env -> Eval Value
