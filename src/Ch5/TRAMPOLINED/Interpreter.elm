@@ -1,4 +1,4 @@
-module Ch5.CONTINUATION_PASSING.Interpreter exposing (Value(..), run)
+module Ch5.TRAMPOLINED.Interpreter exposing (Value(..), run)
 
 import Ch5.CONTINUATION_PASSING.AST as AST exposing (..)
 import Ch5.CONTINUATION_PASSING.Env as Env
@@ -117,6 +117,7 @@ applyCont cont result =
     case cont of
         EndCont ->
             result
+                |> Debug.log "End of computation"
 
         ZeroCont nextCont ->
             case result of
