@@ -49,9 +49,20 @@ run input =
             Err <| SyntaxError err
 
 
+type Continuation
+    = EndCont
+    | ZeroCont Continuation
+    | LetCont Id Expr Env Continuation
+    | IfCont Expr Expr Env Continuation
+    | Diff1Cont Expr Env Continuation
+    | Diff2Cont Value Continuation
+    | RatorCont Expr Env Continuation
+    | RandCont Procedure Continuation
+
+
 evalProgram : AST.Program -> Result RuntimeError Value
 evalProgram (Program expr) =
-    evalExpr expr initEnv
+    evalExpr expr initEnv EndCont
 
 
 initEnv : Env
@@ -62,75 +73,112 @@ initEnv =
         |> Env.extend "i" (VNumber 1)
 
 
-evalExpr : Expr -> Env -> Result RuntimeError Value
-evalExpr expr env =
+evalExpr : Expr -> Env -> Continuation -> Result RuntimeError Value
+evalExpr expr env cont =
     case expr of
         Const n ->
-            Ok <| VNumber n
+            applyCont cont (Ok <| VNumber n)
 
         Var name ->
             case Env.find name env of
                 Just (Env.Value value) ->
-                    Ok value
+                    applyCont cont (Ok value)
 
                 Just (Env.Procedure param body savedEnv) ->
-                    Ok <| VProcedure <| Closure param body savedEnv
+                    applyCont cont (Ok <| VProcedure <| Closure param body savedEnv)
 
                 Nothing ->
-                    Err <| IdentifierNotFound name
+                    applyCont cont (Err <| IdentifierNotFound name)
 
         Diff a b ->
-            evalExpr a env
-                |> Result.andThen
-                    (\va ->
-                        evalExpr b env
-                            |> Result.andThen
-                                (\vb ->
-                                    evalDiff va vb
-                                )
-                    )
+            evalExpr a env (Diff1Cont b env cont)
 
         Zero a ->
-            evalExpr a env
-                |> Result.andThen
-                    (\va ->
-                        evalZero va
-                    )
+            evalExpr a env (ZeroCont cont)
 
         If test consequent alternative ->
-            evalExpr test env
-                |> Result.andThen
-                    (\vTest ->
-                        evalIf vTest consequent alternative env
-                    )
+            evalExpr test env (IfCont consequent alternative env cont)
 
         Let name e body ->
-            evalExpr e env
-                |> Result.andThen
-                    (\ve ->
-                        evalExpr body (Env.extend name ve env)
-                    )
+            evalExpr e env (LetCont name body env cont)
 
         Proc param body ->
-            Ok <| VProcedure <| Closure param body env
+            applyCont cont (Ok <| VProcedure <| Closure param body env)
 
         Letrec name param procBody letrecBody ->
-            evalExpr letrecBody (Env.extendRec name param procBody env)
+            evalExpr letrecBody (Env.extendRec name param procBody env) cont
 
         Call rator rand ->
-            evalExpr rator env
-                |> Result.andThen
-                    (\vRator ->
-                        toProcedure vRator
-                            |> Result.andThen
-                                (\f ->
-                                    evalExpr rand env
-                                        |> Result.andThen
-                                            (\arg ->
-                                                applyProcedure f arg
-                                            )
-                                )
-                    )
+            evalExpr rator env (RatorCont rand env cont)
+
+
+applyCont : Continuation -> Result RuntimeError Value -> Result RuntimeError Value
+applyCont cont result =
+    case cont of
+        EndCont ->
+            result
+                |> Debug.log "End of computation"
+
+        ZeroCont nextCont ->
+            case result of
+                Ok va ->
+                    applyCont nextCont (evalZero va)
+
+                Err _ ->
+                    applyCont nextCont result
+
+        LetCont name body env nextCont ->
+            case result of
+                Ok ve ->
+                    evalExpr body (Env.extend name ve env) nextCont
+
+                Err _ ->
+                    applyCont nextCont result
+
+        IfCont consequent alternative env nextCont ->
+            case result of
+                Ok vTest ->
+                    evalIf vTest consequent alternative env nextCont
+
+                Err _ ->
+                    applyCont nextCont result
+
+        Diff1Cont b env nextCont ->
+            case result of
+                Ok va ->
+                    evalExpr b env (Diff2Cont va nextCont)
+
+                Err _ ->
+                    applyCont nextCont result
+
+        Diff2Cont va nextCont ->
+            case result of
+                Ok vb ->
+                    applyCont nextCont (evalDiff va vb)
+
+                Err _ ->
+                    applyCont nextCont result
+
+        RatorCont rand env nextCont ->
+            case result of
+                Ok vRator ->
+                    case toProcedure vRator of
+                        Ok f ->
+                            evalExpr rand env (RandCont f nextCont)
+
+                        Err err ->
+                            applyCont nextCont (Err err)
+
+                Err _ ->
+                    applyCont nextCont result
+
+        RandCont f nextCont ->
+            case result of
+                Ok arg ->
+                    applyProcedure f arg nextCont
+
+                Err _ ->
+                    applyCont nextCont result
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
@@ -161,25 +209,26 @@ evalZero va =
                     }
 
 
-evalIf : Value -> Expr -> Expr -> Env -> Result RuntimeError Value
-evalIf vTest consequent alternative env =
+evalIf : Value -> Expr -> Expr -> Env -> Continuation -> Result RuntimeError Value
+evalIf vTest consequent alternative env cont =
     case vTest of
         VBool b ->
             if b then
-                evalExpr consequent env
+                evalExpr consequent env cont
 
             else
-                evalExpr alternative env
+                evalExpr alternative env cont
 
         _ ->
-            Err <|
-                TypeError
-                    { expected = [ TBool ]
-                    , actual = [ typeOf vTest ]
-                    }
+            applyCont cont <|
+                Err <|
+                    TypeError
+                        { expected = [ TBool ]
+                        , actual = [ typeOf vTest ]
+                        }
 
 
-applyProcedure : Procedure -> Value -> Result RuntimeError Value
+applyProcedure : Procedure -> Value -> Continuation -> Result RuntimeError Value
 applyProcedure (Closure param body savedEnv) value =
     evalExpr body (Env.extend param value savedEnv)
 
