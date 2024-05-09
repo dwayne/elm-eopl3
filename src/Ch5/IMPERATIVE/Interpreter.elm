@@ -36,6 +36,7 @@ type RuntimeError
         { expected : List Type
         , actual : List Type
         }
+    | InternalError String
 
 
 run : String -> Result Error Value
@@ -60,9 +61,23 @@ type Continuation
     | RandCont Procedure Continuation
 
 
+type alias Registers =
+    { expr : Expr
+    , env : Env
+    , cont : Continuation
+    , result : Result RuntimeError Value
+    }
+
+
 evalProgram : AST.Program -> Result RuntimeError Value
 evalProgram (Program expr) =
-    evalExpr expr initEnv EndCont
+    evalExpr
+        { expr = expr
+        , env = initEnv
+        , cont = EndCont
+        , result = Err <| InternalError "result not initialized"
+        }
+        |> .result
 
 
 initEnv : Env
@@ -73,112 +88,209 @@ initEnv =
         |> Env.extend "i" (VNumber 1)
 
 
-evalExpr : Expr -> Env -> Continuation -> Result RuntimeError Value
-evalExpr expr env cont =
-    case expr of
+evalExpr : Registers -> Registers
+evalExpr registers =
+    case registers.expr of
         Const n ->
-            applyCont cont (Ok <| VNumber n)
+            applyCont
+                { registers
+                    | result = Ok <| VNumber n
+                }
 
         Var name ->
-            case Env.find name env of
+            case Env.find name registers.env of
                 Just (Env.Value value) ->
-                    applyCont cont (Ok value)
+                    applyCont
+                        { registers
+                            | result = Ok value
+                        }
 
                 Just (Env.Procedure param body savedEnv) ->
-                    applyCont cont (Ok <| VProcedure <| Closure param body savedEnv)
+                    applyCont
+                        { registers
+                            | result = Ok <| VProcedure <| Closure param body savedEnv
+                        }
 
                 Nothing ->
-                    applyCont cont (Err <| IdentifierNotFound name)
+                    applyCont
+                        { registers
+                            | result = Err <| IdentifierNotFound name
+                        }
 
         Diff a b ->
-            evalExpr a env (Diff1Cont b env cont)
+            evalExpr
+                { registers
+                    | expr = a
+                    , cont = Diff1Cont b registers.env registers.cont
+                }
 
         Zero a ->
-            evalExpr a env (ZeroCont cont)
+            evalExpr
+                { registers
+                    | expr = a
+                    , cont = ZeroCont registers.cont
+                }
 
         If test consequent alternative ->
-            evalExpr test env (IfCont consequent alternative env cont)
+            evalExpr
+                { registers
+                    | expr = test
+                    , cont = IfCont consequent alternative registers.env registers.cont
+                }
 
         Let name e body ->
-            evalExpr e env (LetCont name body env cont)
+            evalExpr
+                { registers
+                    | expr = e
+                    , cont = LetCont name body registers.env registers.cont
+                }
 
         Proc param body ->
-            applyCont cont (Ok <| VProcedure <| Closure param body env)
+            applyCont
+                { registers
+                    | result = Ok <| VProcedure <| Closure param body registers.env
+                }
 
         Letrec name param procBody letrecBody ->
-            evalExpr letrecBody (Env.extendRec name param procBody env) cont
+            evalExpr
+                { registers
+                    | expr = letrecBody
+                    , env = Env.extendRec name param procBody registers.env
+                }
 
         Call rator rand ->
-            evalExpr rator env (RatorCont rand env cont)
+            evalExpr
+                { registers
+                    | expr = rator
+                    , cont = RatorCont rand registers.env registers.cont
+                }
 
 
-applyCont : Continuation -> Result RuntimeError Value -> Result RuntimeError Value
-applyCont cont result =
-    case cont of
+applyCont : Registers -> Registers
+applyCont registers =
+    case registers.cont of
         EndCont ->
-            result
+            registers
                 |> Debug.log "End of computation"
 
         ZeroCont nextCont ->
-            case result of
+            case registers.result of
                 Ok va ->
-                    applyCont nextCont (evalZero va)
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                            , result = evalZero va
+                        }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
         LetCont name body env nextCont ->
-            case result of
+            case registers.result of
                 Ok ve ->
-                    evalExpr body (Env.extend name ve env) nextCont
+                    evalExpr
+                        { registers
+                            | expr = body
+                            , env = Env.extend name ve env
+                            , cont = nextCont
+                        }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
         IfCont consequent alternative env nextCont ->
-            case result of
+            case registers.result of
                 Ok vTest ->
-                    evalIf vTest consequent alternative env nextCont
+                    evalIf vTest
+                        consequent
+                        alternative
+                        { registers
+                            | env = env
+                            , cont = nextCont
+                        }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
         Diff1Cont b env nextCont ->
-            case result of
+            case registers.result of
                 Ok va ->
-                    evalExpr b env (Diff2Cont va nextCont)
+                    evalExpr
+                        { registers
+                            | expr = b
+                            , env = env
+                            , cont = Diff2Cont va nextCont
+                        }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
         Diff2Cont va nextCont ->
-            case result of
+            case registers.result of
                 Ok vb ->
-                    applyCont nextCont (evalDiff va vb)
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                            , result = evalDiff va vb
+                        }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
         RatorCont rand env nextCont ->
-            case result of
+            case registers.result of
                 Ok vRator ->
                     case toProcedure vRator of
                         Ok f ->
-                            evalExpr rand env (RandCont f nextCont)
+                            evalExpr
+                                { registers
+                                    | expr = rand
+                                    , env = env
+                                    , cont = RandCont f nextCont
+                                }
 
                         Err err ->
-                            applyCont nextCont (Err err)
+                            applyCont
+                                { registers
+                                    | cont = nextCont
+                                    , result = Err err
+                                }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
         RandCont f nextCont ->
-            case result of
+            case registers.result of
                 Ok arg ->
-                    applyProcedure f arg nextCont
+                    applyProcedure f
+                        arg
+                        { registers
+                            | cont = nextCont
+                        }
 
                 Err _ ->
-                    applyCont nextCont result
+                    applyCont
+                        { registers
+                            | cont = nextCont
+                        }
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
@@ -209,28 +321,41 @@ evalZero va =
                     }
 
 
-evalIf : Value -> Expr -> Expr -> Env -> Continuation -> Result RuntimeError Value
-evalIf vTest consequent alternative env cont =
+evalIf : Value -> Expr -> Expr -> Registers -> Registers
+evalIf vTest consequent alternative registers =
     case vTest of
         VBool b ->
             if b then
-                evalExpr consequent env cont
+                evalExpr
+                    { registers
+                        | expr = consequent
+                    }
 
             else
-                evalExpr alternative env cont
+                evalExpr
+                    { registers
+                        | expr = alternative
+                    }
 
         _ ->
-            applyCont cont <|
-                Err <|
-                    TypeError
-                        { expected = [ TBool ]
-                        , actual = [ typeOf vTest ]
-                        }
+            applyCont
+                { registers
+                    | result =
+                        Err <|
+                            TypeError
+                                { expected = [ TBool ]
+                                , actual = [ typeOf vTest ]
+                                }
+                }
 
 
-applyProcedure : Procedure -> Value -> Continuation -> Result RuntimeError Value
-applyProcedure (Closure param body savedEnv) value =
-    evalExpr body (Env.extend param value savedEnv)
+applyProcedure : Procedure -> Value -> Registers -> Registers
+applyProcedure (Closure param body savedEnv) value registers =
+    evalExpr
+        { registers
+            | expr = body
+            , env = Env.extend param value savedEnv
+        }
 
 
 toProcedure : Value -> Result RuntimeError Procedure
