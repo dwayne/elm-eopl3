@@ -1,4 +1,4 @@
-module Ch5.TRAMPOLINED.Interpreter exposing (Value(..), run)
+module Ch5.IMPERATIVE.Interpreter exposing (Value(..), run)
 
 import Ch5.CONTINUATION_PASSING.AST as AST exposing (..)
 import Ch5.CONTINUATION_PASSING.Env as Env
@@ -62,7 +62,7 @@ type Continuation
 
 evalProgram : AST.Program -> Result RuntimeError Value
 evalProgram (Program expr) =
-    trampoline (evalExpr expr initEnv EndCont)
+    evalExpr expr initEnv EndCont
 
 
 initEnv : Env
@@ -73,22 +73,7 @@ initEnv =
         |> Env.extend "i" (VNumber 1)
 
 
-type Bounce
-    = FinalAnswer (Result RuntimeError Value)
-    | Suspend (() -> Bounce)
-
-
-trampoline : Bounce -> Result RuntimeError Value
-trampoline bounce =
-    case bounce of
-        FinalAnswer result ->
-            result
-
-        Suspend snapshot ->
-            trampoline (snapshot ())
-
-
-evalExpr : Expr -> Env -> Continuation -> Bounce
+evalExpr : Expr -> Env -> Continuation -> Result RuntimeError Value
 evalExpr expr env cont =
     case expr of
         Const n ->
@@ -127,11 +112,12 @@ evalExpr expr env cont =
             evalExpr rator env (RatorCont rand env cont)
 
 
-applyCont : Continuation -> Result RuntimeError Value -> Bounce
+applyCont : Continuation -> Result RuntimeError Value -> Result RuntimeError Value
 applyCont cont result =
     case cont of
         EndCont ->
-            FinalAnswer result
+            result
+                |> Debug.log "End of computation"
 
         ZeroCont nextCont ->
             case result of
@@ -223,7 +209,7 @@ evalZero va =
                     }
 
 
-evalIf : Value -> Expr -> Expr -> Env -> Continuation -> Bounce
+evalIf : Value -> Expr -> Expr -> Env -> Continuation -> Result RuntimeError Value
 evalIf vTest consequent alternative env cont =
     case vTest of
         VBool b ->
@@ -242,9 +228,9 @@ evalIf vTest consequent alternative env cont =
                         }
 
 
-applyProcedure : Procedure -> Value -> Continuation -> Bounce
-applyProcedure (Closure param body savedEnv) value cont =
-    Suspend (\_ -> evalExpr body (Env.extend param value savedEnv) cont)
+applyProcedure : Procedure -> Value -> Continuation -> Result RuntimeError Value
+applyProcedure (Closure param body savedEnv) value =
+    evalExpr body (Env.extend param value savedEnv)
 
 
 toProcedure : Value -> Result RuntimeError Procedure
