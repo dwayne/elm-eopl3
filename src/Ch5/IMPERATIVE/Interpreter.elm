@@ -171,7 +171,6 @@ applyCont registers =
     case registers.cont of
         EndCont ->
             registers
-                |> Debug.log "End of computation"
 
         ZeroCont nextCont ->
             case registers.result of
