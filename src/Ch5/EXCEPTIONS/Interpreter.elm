@@ -111,6 +111,12 @@ evalExpr expr env cont =
         Call rator rand ->
             evalExpr rator env (RatorCont rand env cont)
 
+        Try _ _ _ ->
+            Debug.todo "Implement Try"
+
+        Raise _ ->
+            Debug.todo "Implement Raise"
+
 
 applyCont : Continuation -> Result RuntimeError Value -> Result RuntimeError Value
 applyCont cont result =

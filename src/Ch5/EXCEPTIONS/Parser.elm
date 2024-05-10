@@ -33,6 +33,8 @@ expr =
         , procExpr
         , letrecExpr
         , callExpr
+        , tryExpr
+        , raiseExpr
         , constExpr
         , varExpr
         ]
@@ -113,6 +115,25 @@ callExpr =
         |. L.symbol ")"
 
 
+tryExpr : Parser Expr
+tryExpr =
+    P.succeed Try
+        |. L.keyword "try"
+        |= P.lazy (\_ -> expr)
+        |. L.keyword "catch"
+        |. L.symbol "("
+        |= id
+        |. L.symbol ")"
+        |= P.lazy (\_ -> expr)
+
+
+raiseExpr : Parser Expr
+raiseExpr =
+    P.succeed Raise
+        |. L.keyword "raise"
+        |= P.lazy (\_ -> expr)
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -143,5 +164,8 @@ id =
                 , "proc"
                 , "then"
                 , "zero?"
+                , "try"
+                , "catch"
+                , "raise"
                 ]
         }

@@ -20,6 +20,8 @@ type Expr
     | Proc Id Expr
     | Letrec Id Id Expr Expr
     | Call Expr Expr
+    | Try Expr Id Expr
+    | Raise Expr
 
 
 type alias Number =
