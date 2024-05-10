@@ -216,6 +216,57 @@ suite =
                 """
               , VNumber 12
               )
+            , ( """
+                letrec
+                  f(i) =
+                    if zero?(-(i, 5)) then
+                      raise 99
+                    else
+                      if zero?(i) then
+                        0
+                      else
+                        -((f -(i, 1)), -(0, i))
+                in
+                try
+                  (f 8)
+                catch (x)
+                  x
+                """
+              , VNumber 99
+              )
+            , ( """
+                letrec
+                  f(i) =
+                    if zero?(-(i, 5)) then
+                      raise 99
+                    else
+                      if zero?(i) then
+                        0
+                      else
+                        -((f -(i, 1)), -(0, i))
+                in
+                try
+                  (f 4)
+                catch (x)
+                  x
+                """
+              , VNumber 10
+              )
+            , ( """
+                letrec
+                  f(i) =
+                    if zero?(-(i, 5)) then
+                      raise 99
+                    else
+                      if zero?(i) then
+                        0
+                      else
+                        -((f -(i, 1)), -(0, i))
+                in
+                (f 8)
+                """
+              , VNumber 99
+              )
             ]
 
 
