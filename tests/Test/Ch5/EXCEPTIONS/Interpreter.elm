@@ -1,6 +1,6 @@
 module Test.Ch5.EXCEPTIONS.Interpreter exposing (suite)
 
-import Ch5.EXCEPTIONS.Interpreter as I exposing (Value(..))
+import Ch5.EXCEPTIONS.Interpreter as I exposing (Error(..), RuntimeError(..), Value(..))
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test)
 
@@ -252,22 +252,38 @@ suite =
                 """
               , VNumber 10
               )
-            , ( """
-                letrec
-                  f(i) =
-                    if zero?(-(i, 5)) then
-                      raise 99
-                    else
-                      if zero?(i) then
-                        0
-                      else
-                        -((f -(i, 1)), -(0, i))
-                in
-                (f 8)
-                """
-              , VNumber 99
-              )
             ]
+            ++ [ let
+                    input =
+                        "raise zero?(x)"
+                 in
+                 test input <|
+                    \_ ->
+                        input
+                            |> I.run
+                            |> Expect.equal (Err <| RuntimeError <| UncaughtException <| VBool False)
+               , let
+                    input =
+                        """
+                  letrec
+                    f(i) =
+                      if zero?(-(i, 5)) then
+                        raise 99
+                      else
+                        if zero?(i) then
+                          0
+                        else
+                          -((f -(i, 1)), -(0, i))
+                  in
+                  (f 8)
+                  """
+                 in
+                 test input <|
+                    \_ ->
+                        input
+                            |> I.run
+                            |> Expect.equal (Err <| RuntimeError <| UncaughtException <| VNumber 99)
+               ]
 
 
 testValue : ( String, Value ) -> Test

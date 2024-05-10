@@ -1,4 +1,4 @@
-module Ch5.EXCEPTIONS.Interpreter exposing (Value(..), run)
+module Ch5.EXCEPTIONS.Interpreter exposing (Error(..), RuntimeError(..), Value(..), run)
 
 import Ch5.CONTINUATION_PASSING.Env as Env
 import Ch5.EXCEPTIONS.AST as AST exposing (..)
@@ -36,6 +36,7 @@ type RuntimeError
         { expected : List Type
         , actual : List Type
         }
+    | UncaughtException Value
 
 
 run : String -> Result Error Value
@@ -58,6 +59,8 @@ type Continuation
     | Diff2Cont Value Continuation
     | RatorCont Expr Env Continuation
     | RandCont Procedure Continuation
+    | TryCont Id Expr Env Continuation
+    | RaiseCont Continuation
 
 
 evalProgram : AST.Program -> Result RuntimeError Value
@@ -111,11 +114,11 @@ evalExpr expr env cont =
         Call rator rand ->
             evalExpr rator env (RatorCont rand env cont)
 
-        Try _ _ _ ->
-            Debug.todo "Implement Try"
+        Try e name handlerExpr ->
+            evalExpr e env (TryCont name handlerExpr env cont)
 
-        Raise _ ->
-            Debug.todo "Implement Raise"
+        Raise e ->
+            evalExpr e env (RaiseCont cont)
 
 
 applyCont : Continuation -> Result RuntimeError Value -> Result RuntimeError Value
@@ -123,6 +126,7 @@ applyCont cont result =
     case cont of
         EndCont ->
             result
+                |> Debug.log "End of computation"
 
         ZeroCont nextCont ->
             case result of
@@ -184,6 +188,55 @@ applyCont cont result =
 
                 Err _ ->
                     applyCont nextCont result
+
+        TryCont _ _ _ nextCont ->
+            applyCont nextCont result
+
+        RaiseCont nextCont ->
+            case result of
+                Ok value ->
+                    applyHandler nextCont value
+
+                Err _ ->
+                    applyCont nextCont result
+
+
+applyHandler : Continuation -> Value -> Result RuntimeError Value
+applyHandler cont value =
+    --
+    -- Find the nearest handler to apply.
+    --
+    case cont of
+        TryCont name handlerExpr savedEnv nextCont ->
+            evalExpr handlerExpr (Env.extend name value savedEnv) nextCont
+
+        EndCont ->
+            Err (UncaughtException value)
+                |> Debug.log "End of computation"
+
+        ZeroCont nextCont ->
+            applyHandler nextCont value
+
+        LetCont _ _ _ nextCont ->
+            applyHandler nextCont value
+
+        IfCont _ _ _ nextCont ->
+            applyHandler nextCont value
+
+        Diff1Cont _ _ nextCont ->
+            applyHandler nextCont value
+
+        Diff2Cont _ nextCont ->
+            applyHandler nextCont value
+
+        RatorCont _ _ nextCont ->
+            applyHandler nextCont value
+
+        RandCont _ nextCont ->
+            applyHandler nextCont value
+
+        RaiseCont nextCont ->
+            applyHandler nextCont value
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
