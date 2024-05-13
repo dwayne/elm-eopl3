@@ -126,8 +126,8 @@ applyCont cont result =
     case cont of
         EndCont ->
             result
-                |> Debug.log "End of computation"
 
+        --|> Debug.log "End of computation"
         ZeroCont nextCont ->
             case result of
                 Ok va ->
@@ -212,8 +212,8 @@ applyHandler cont value =
 
         EndCont ->
             Err (UncaughtException value)
-                |> Debug.log "End of computation"
 
+        --|> Debug.log "End of computation"
         ZeroCont nextCont ->
             applyHandler nextCont value
 
