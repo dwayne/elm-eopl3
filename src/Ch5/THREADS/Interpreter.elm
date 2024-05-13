@@ -6,6 +6,23 @@ import Ch5.THREADS.Env as Env
 import Ch5.THREADS.Parser as P
 
 
+
+--
+-- TODO:
+--
+-- [x] Start with IMPLICIT-REFS
+-- [x] Remove Eval and implement the store-passing interpreter explicitly
+-- [x] Refactor the interpreter to use continuations
+-- [ ] Add car, cdr, null?, emptylist, list
+-- [ ] Add print
+-- [ ] Add a queue
+-- [ ] Represent a thread
+-- [ ] Add a scheduler
+-- [ ] Add a spawn expression
+-- [ ] Interpret the spawn expression
+--
+
+
 type Value
     = VUnit
     | VNumber Number
