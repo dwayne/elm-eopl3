@@ -58,13 +58,26 @@ run input =
             Err <| SyntaxError err
 
 
+type Continuation
+    = EndCont
+    | ZeroCont Continuation
+    | LetCont Id Expr Env Continuation
+    | IfCont Expr Expr Env Continuation
+    | Diff1Cont Expr Env Continuation
+    | Diff2Cont Value Continuation
+    | RatorCont Expr Env Continuation
+    | RandCont Procedure Continuation
+    | SetCont Id Env Continuation
+    | SequenceCont (List Expr) Env Continuation
+
+
 evalProgram : AST.Program -> Result RuntimeError Value
 evalProgram (Program expr) =
     let
         ( initEnv, initStore ) =
             initState
     in
-    evalExpr expr initEnv initStore
+    evalExpr expr initEnv EndCont initStore
         |> Tuple.first
 
 
@@ -91,13 +104,14 @@ initState =
     )
 
 
-evalExpr : Expr -> Env -> Store -> ( Result RuntimeError Value, Store )
-evalExpr expr env store0 =
+evalExpr : Expr -> Env -> Continuation -> Store -> ( Result RuntimeError Value, Store )
+evalExpr expr env cont store0 =
     case expr of
         Const n ->
-            ( Ok <| VNumber n
-            , store0
-            )
+            applyCont cont
+                ( Ok <| VNumber n
+                , store0
+                )
 
         Var name ->
             let
@@ -114,106 +128,126 @@ evalExpr expr env store0 =
                             , store1
                             )
             in
-            ( result2
-            , store2
-            )
+            applyCont cont
+                ( result2
+                , store2
+                )
 
         Diff a b ->
-            let
-                ( resultA, store1 ) =
-                    evalExpr a env store0
-            in
-            case resultA of
-                Ok va ->
-                    let
-                        ( resultB, store2 ) =
-                            evalExpr b env store1
-                    in
-                    case resultB of
-                        Ok vb ->
-                            ( evalDiff va vb
-                            , store2
-                            )
-
-                        Err _ ->
-                            ( resultB
-                            , store2
-                            )
-
-                Err _ ->
-                    ( resultA
-                    , store1
-                    )
+            evalExpr a env (Diff1Cont b env cont) store0
 
         Zero a ->
-            let
-                ( resultA, store1 ) =
-                    evalExpr a env store0
-            in
-            case resultA of
-                Ok va ->
-                    ( evalZero va
-                    , store1
-                    )
-
-                Err _ ->
-                    ( resultA
-                    , store1
-                    )
+            evalExpr a env (ZeroCont cont) store0
 
         If test consequent alternative ->
-            let
-                ( resultTest, store1 ) =
-                    evalExpr test env store0
-            in
-            case resultTest of
-                Ok vTest ->
-                    evalIf vTest consequent alternative env store1
-
-                Err _ ->
-                    ( resultTest
-                    , store1
-                    )
+            evalExpr test env (IfCont consequent alternative env cont) store0
 
         Let name e body ->
-            let
-                ( resultE, store1 ) =
-                    evalExpr e env store0
-            in
-            case resultE of
-                Ok ve ->
-                    let
-                        ( resultRef, store2 ) =
-                            newref ve store1
-                    in
-                    case resultRef of
-                        Ok ref ->
-                            evalExpr body (Env.extend name ref env) store2
-
-                        Err err ->
-                            ( Err err
-                            , store2
-                            )
-
-                Err _ ->
-                    ( resultE
-                    , store1
-                    )
+            evalExpr e env (LetCont name body env cont) store0
 
         Proc param body ->
-            ( Ok <| VProcedure <| Closure param body env
+            applyCont cont
+                ( Ok <| VProcedure <| Closure param body env
+                , store0
+                )
+
+        Letrec procrecs letrecBody ->
+            evalExpr letrecBody (Env.extendRec procrecs env) cont store0
+
+        Call rator rand ->
+            evalExpr rator env (RatorCont rand env cont) store0
+
+        Set name e ->
+            evalExpr e env (SetCont name env cont) store0
+
+        Begin firstExpr restExprs ->
+            evalExpr firstExpr env (SequenceCont restExprs env cont) store0
+
+
+applyCont : Continuation -> ( Result RuntimeError Value, Store ) -> ( Result RuntimeError Value, Store )
+applyCont cont ( result, store0 ) =
+    case cont of
+        EndCont ->
+            ( result
+                |> Debug.log "End of computation"
             , store0
             )
 
-        Letrec procrecs letrecBody ->
-            evalExpr letrecBody (Env.extendRec procrecs env) store0
+        ZeroCont nextCont ->
+            case result of
+                Ok va ->
+                    applyCont nextCont
+                        ( evalZero va
+                        , store0
+                        )
 
-        Call rator rand ->
-            let
-                ( resultRator, store1 ) =
-                    evalExpr rator env store0
-            in
-            case resultRator of
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        LetCont name body env nextCont ->
+            case result of
+                Ok ve ->
+                    let
+                        ( resultRef, store1 ) =
+                            newref ve store0
+                    in
+                    case resultRef of
+                        Ok ref ->
+                            evalExpr body (Env.extend name ref env) nextCont store1
+
+                        Err err ->
+                            applyCont nextCont
+                                ( Err err
+                                , store1
+                                )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        IfCont consequent alternative env nextCont ->
+            case result of
+                Ok vTest ->
+                    evalIf vTest consequent alternative env nextCont store0
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        Diff1Cont b env nextCont ->
+            case result of
+                Ok va ->
+                    evalExpr b env (Diff2Cont va nextCont) store0
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        Diff2Cont va nextCont ->
+            case result of
+                Ok vb ->
+                    applyCont nextCont
+                        ( evalDiff va vb
+                        , store0
+                        )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        RatorCont rand env nextCont ->
+            case result of
                 Ok vRator ->
                     let
                         resultF =
@@ -221,56 +255,65 @@ evalExpr expr env store0 =
                     in
                     case resultF of
                         Ok f ->
-                            let
-                                ( resultRand, store2 ) =
-                                    evalExpr rand env store1
-                            in
-                            case resultRand of
-                                Ok vRand ->
-                                    applyProcedure f vRand store2
-
-                                Err _ ->
-                                    ( resultRand
-                                    , store2
-                                    )
+                            evalExpr rand env (RandCont f nextCont) store0
 
                         Err err ->
-                            ( Err err
-                            , store1
-                            )
+                            applyCont nextCont
+                                ( Err err
+                                , store0
+                                )
 
                 Err _ ->
-                    ( resultRator
-                    , store1
-                    )
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
 
-        Set name e ->
-            let
-                ( resultE, store1 ) =
-                    evalExpr e env store0
-            in
-            case resultE of
+        RandCont f nextCont ->
+            case result of
+                Ok vRand ->
+                    applyProcedure f vRand nextCont store0
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        SetCont name env nextCont ->
+            case result of
                 Ok ve ->
                     let
-                        ( result, store2 ) =
-                            find name env store1
+                        ( findResult, store1 ) =
+                            find name env store0
                     in
-                    case result of
+                    case findResult of
                         Ok ref ->
-                            setref ve ref store2
+                            applyCont nextCont <|
+                                setref ve ref store1
 
                         Err err ->
-                            ( Err err
-                            , store2
-                            )
+                            applyCont nextCont
+                                ( Err err
+                                , store1
+                                )
 
                 Err _ ->
-                    ( resultE
-                    , store1
-                    )
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
 
-        Begin firstExpr restExprs ->
-            evalExprs (firstExpr :: restExprs) env store0
+        SequenceCont exprs env nextCont ->
+            case exprs of
+                [] ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+                expr :: restExprs ->
+                    evalExpr expr env (SequenceCont restExprs env nextCont) store0
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
@@ -301,63 +344,42 @@ evalZero va =
                     }
 
 
-evalIf : Value -> Expr -> Expr -> Env -> Store -> ( Result RuntimeError Value, Store )
-evalIf vTest consequent alternative env store =
+evalIf : Value -> Expr -> Expr -> Env -> Continuation -> Store -> ( Result RuntimeError Value, Store )
+evalIf vTest consequent alternative env cont store =
     case vTest of
         VBool b ->
             if b then
-                evalExpr consequent env store
+                evalExpr consequent env cont store
 
             else
-                evalExpr alternative env store
+                evalExpr alternative env cont store
 
         _ ->
-            ( Err <|
-                TypeError
-                    { expected = [ TBool ]
-                    , actual = [ typeOf vTest ]
-                    }
-            , store
-            )
+            applyCont cont
+                ( Err <|
+                    TypeError
+                        { expected = [ TBool ]
+                        , actual = [ typeOf vTest ]
+                        }
+                , store
+                )
 
 
-applyProcedure : Procedure -> Value -> Store -> ( Result RuntimeError Value, Store )
-applyProcedure (Closure param body savedEnv) value store0 =
+applyProcedure : Procedure -> Value -> Continuation -> Store -> ( Result RuntimeError Value, Store )
+applyProcedure (Closure param body savedEnv) value cont store0 =
     let
         ( result, store1 ) =
             newref value store0
     in
     case result of
         Ok ref ->
-            evalExpr body (Env.extend param ref savedEnv) store1
+            evalExpr body (Env.extend param ref savedEnv) cont store1
 
         Err err ->
-            ( Err err
-            , store1
-            )
-
-
-evalExprs : List Expr -> Env -> Store -> ( Result RuntimeError Value, Store )
-evalExprs exprs env store0 =
-    case exprs of
-        [ expr ] ->
-            evalExpr expr env store0
-
-        expr :: restExprs ->
-            let
-                ( _, store1 ) =
-                    evalExpr expr env store0
-            in
-            evalExprs restExprs env store1
-
-        [] ->
-            --
-            -- N.B. This should NEVER happen since the parser
-            --      expects begin to have at least one expression.
-            --
-            ( Err <| UnexpectedError "begin has no expressions"
-            , store0
-            )
+            applyCont cont
+                ( Err err
+                , store1
+                )
 
 
 toProcedure : Value -> Result RuntimeError Procedure
