@@ -259,6 +259,56 @@ suite =
                 """
               , VNumber -1
               )
+            , ( """
+                emptylist
+                """
+              , VList []
+              )
+            , ( """
+                cons(1, emptylist)
+                """
+              , VList [ VNumber 1 ]
+              )
+            , ( """
+                cons(1, cons(2, cons(3, cons(zero?(0), emptylist))))
+                """
+              , VList [ VNumber 1, VNumber 2, VNumber 3, VBool True ]
+              )
+            , ( """
+                car(cons(1, emptylist))
+                """
+              , VNumber 1
+              )
+            , ( """
+                cdr(cons(1, cons(2, emptylist)))
+                """
+              , VList [ VNumber 2 ]
+              )
+            , ( """
+                null?(emptylist)
+                """
+              , VBool True
+              )
+            , ( """
+                null?(cons(1, emptylist))
+                """
+              , VBool False
+              )
+            , ( """
+                list()
+                """
+              , VList []
+              )
+            , ( """
+                list(5)
+                """
+              , VList [ VNumber 5 ]
+              )
+            , ( """
+                list(5, zero?(10), 15)
+                """
+              , VList [ VNumber 5, VBool False, VNumber 15 ]
+              )
             ]
 
 

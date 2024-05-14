@@ -16,6 +16,12 @@ type Expr
     | Var Id
     | Diff Expr Expr
     | Zero Expr
+    | Cons Expr Expr
+    | Car Expr
+    | Cdr Expr
+    | Null Expr
+    | EmptyList
+    | List (List Expr)
     | If Expr Expr Expr
     | Let Id Expr Expr
     | Proc Id Expr

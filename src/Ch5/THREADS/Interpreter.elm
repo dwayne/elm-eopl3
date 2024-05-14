@@ -13,7 +13,7 @@ import Ch5.THREADS.Parser as P
 -- [x] Start with IMPLICIT-REFS
 -- [x] Remove Eval and implement the store-passing interpreter explicitly
 -- [x] Refactor the interpreter to use continuations
--- [ ] Add car, cdr, null?, emptylist, list
+-- [x] Add cons, car, cdr, null?, emptylist, list
 -- [ ] Add print
 -- [ ] Add a queue
 -- [ ] Represent a thread
@@ -27,6 +27,7 @@ type Value
     = VUnit
     | VNumber Number
     | VBool Bool
+    | VList (List Value)
     | VProcedure Procedure
 
 
@@ -46,6 +47,7 @@ type Type
     = TUnit
     | TNumber
     | TBool
+    | TList
     | TProcedure
 
 
@@ -57,6 +59,7 @@ type Error
 type RuntimeError
     = IdentifierNotFound Id
     | ReferenceNotFound Ref
+    | EmptyListError
     | TypeError
         { expected : List Type
         , actual : List Type
@@ -82,6 +85,12 @@ type Continuation
     | IfCont Expr Expr Env Continuation
     | Diff1Cont Expr Env Continuation
     | Diff2Cont Value Continuation
+    | Cons1Cont Expr Env Continuation
+    | Cons2Cont Value Continuation
+    | CarCont Continuation
+    | CdrCont Continuation
+    | NullCont Continuation
+    | ListCont (List Value) (List Expr) Env Continuation
     | RatorCont Expr Env Continuation
     | RandCont Procedure Continuation
     | SetCont Id Env Continuation
@@ -155,6 +164,35 @@ evalExpr expr env cont store0 =
 
         Zero a ->
             evalExpr a env (ZeroCont cont) store0
+
+        Cons a b ->
+            evalExpr a env (Cons1Cont b env cont) store0
+
+        Car a ->
+            evalExpr a env (CarCont cont) store0
+
+        Cdr a ->
+            evalExpr a env (CdrCont cont) store0
+
+        Null a ->
+            evalExpr a env (NullCont cont) store0
+
+        EmptyList ->
+            applyCont cont
+                ( Ok <| VList []
+                , store0
+                )
+
+        List exprs ->
+            case exprs of
+                [] ->
+                    applyCont cont
+                        ( Ok <| VList []
+                        , store0
+                        )
+
+                firstExpr :: restExprs ->
+                    evalExpr firstExpr env (ListCont [] restExprs env cont) store0
 
         If test consequent alternative ->
             evalExpr test env (IfCont consequent alternative env cont) store0
@@ -256,6 +294,96 @@ applyCont cont ( result, store0 ) =
                         ( evalDiff va vb
                         , store0
                         )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        Cons1Cont b env nextCont ->
+            case result of
+                Ok va ->
+                    evalExpr b env (Cons2Cont va nextCont) store0
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        Cons2Cont va nextCont ->
+            case result of
+                Ok vb ->
+                    applyCont nextCont
+                        ( evalCons va vb
+                        , store0
+                        )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        CarCont nextCont ->
+            case result of
+                Ok va ->
+                    applyCont nextCont
+                        ( evalCar va
+                        , store0
+                        )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        CdrCont nextCont ->
+            case result of
+                Ok va ->
+                    applyCont nextCont
+                        ( evalCdr va
+                        , store0
+                        )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        NullCont nextCont ->
+            case result of
+                Ok va ->
+                    applyCont nextCont
+                        ( evalNull va
+                        , store0
+                        )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , store0
+                        )
+
+        ListCont prevRevValues exprs env nextCont ->
+            case result of
+                Ok value ->
+                    let
+                        revValues =
+                            value :: prevRevValues
+                    in
+                    case exprs of
+                        [] ->
+                            applyCont nextCont
+                                ( Ok <| VList <| List.reverse revValues
+                                , store0
+                                )
+
+                        firstExpr :: restExprs ->
+                            evalExpr firstExpr env (ListCont revValues restExprs env nextCont) store0
 
                 Err _ ->
                     applyCont nextCont
@@ -382,6 +510,46 @@ evalIf vTest consequent alternative env cont store =
                 )
 
 
+evalCons : Value -> Value -> Result RuntimeError Value
+evalCons va vb =
+    toList vb
+        |> Result.map (VList << (::) va)
+
+
+evalCar : Value -> Result RuntimeError Value
+evalCar va =
+    toList va
+        |> Result.andThen
+            (\list ->
+                case list of
+                    h :: _ ->
+                        Ok h
+
+                    [] ->
+                        Err EmptyListError
+            )
+
+
+evalCdr : Value -> Result RuntimeError Value
+evalCdr va =
+    toList va
+        |> Result.andThen
+            (\list ->
+                case list of
+                    _ :: t ->
+                        Ok <| VList t
+
+                    [] ->
+                        Err EmptyListError
+            )
+
+
+evalNull : Value -> Result RuntimeError Value
+evalNull va =
+    toList va
+        |> Result.map (VBool << List.isEmpty)
+
+
 applyProcedure : Procedure -> Value -> Continuation -> Store -> ( Result RuntimeError Value, Store )
 applyProcedure (Closure param body savedEnv) value cont store0 =
     let
@@ -413,6 +581,20 @@ toProcedure v =
                     }
 
 
+toList : Value -> Result RuntimeError (List Value)
+toList v =
+    case v of
+        VList list ->
+            Ok list
+
+        _ ->
+            Err <|
+                TypeError
+                    { expected = [ TList ]
+                    , actual = [ typeOf v ]
+                    }
+
+
 typeOf : Value -> Type
 typeOf v =
     case v of
@@ -424,6 +606,9 @@ typeOf v =
 
         VBool _ ->
             TBool
+
+        VList _ ->
+            TList
 
         VProcedure _ ->
             TProcedure

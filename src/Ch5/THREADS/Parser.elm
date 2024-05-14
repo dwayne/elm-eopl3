@@ -28,6 +28,12 @@ expr =
     P.oneOf
         [ diffExpr
         , zeroExpr
+        , consExpr
+        , carExpr
+        , cdrExpr
+        , nullExpr
+        , emptyListExpr
+        , listExpr
         , ifExpr
         , letExpr
         , procExpr
@@ -58,6 +64,73 @@ zeroExpr =
         |. L.symbol "("
         |= P.lazy (\_ -> expr)
         |. L.symbol ")"
+
+
+consExpr : Parser Expr
+consExpr =
+    P.succeed Cons
+        |. L.symbol "cons"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ","
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+carExpr : Parser Expr
+carExpr =
+    P.succeed Car
+        |. L.keyword "car"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+cdrExpr : Parser Expr
+cdrExpr =
+    P.succeed Cdr
+        |. L.keyword "cdr"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+nullExpr : Parser Expr
+nullExpr =
+    P.succeed Null
+        |. L.keyword "null?"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+emptyListExpr : Parser Expr
+emptyListExpr =
+    P.succeed EmptyList
+        |. L.keyword "emptylist"
+
+
+listExpr : Parser Expr
+listExpr =
+    P.succeed List
+        |. L.keyword "list"
+        |. L.symbol "("
+        |= commaSepExprs
+        |. L.symbol ")"
+
+
+commaSepExprs : Parser (List Expr)
+commaSepExprs =
+    P.map (Maybe.withDefault []) <|
+        optional
+            (P.succeed (::)
+                |= P.lazy (\_ -> expr)
+                |= many
+                    (P.succeed identity
+                        |. L.symbol ","
+                        |= P.lazy (\_ -> expr)
+                    )
+            )
 
 
 ifExpr : Parser Expr
@@ -166,12 +239,18 @@ id =
         , reserved =
             Set.fromList
                 [ "begin"
+                , "car"
+                , "cdr"
+                , "cons"
                 , "else"
+                , "emptylist"
                 , "end"
                 , "if"
                 , "in"
                 , "let"
                 , "letrec"
+                , "list"
+                , "null?"
                 , "proc"
                 , "set"
                 , "then"
@@ -182,6 +261,14 @@ id =
 
 
 -- HELPERS
+
+
+optional : Parser a -> Parser (Maybe a)
+optional p =
+    P.oneOf
+        [ P.map Just p
+        , P.succeed Nothing
+        ]
 
 
 many : Parser a -> Parser (List a)
