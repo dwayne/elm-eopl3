@@ -1,6 +1,7 @@
 module Test.Ch5.THREADS.Interpreter exposing (suite)
 
 import Ch5.THREADS.Interpreter as I exposing (Value(..))
+import Ch5.THREADS.Output as Output
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test)
 
@@ -310,6 +311,22 @@ suite =
               , VList [ VNumber 5, VBool False, VNumber 15 ]
               )
             ]
+            ++ List.map testOutput
+                [ ( """
+                    print(x)
+                    """
+                  , [ "10" ]
+                  )
+                , ( """
+                    begin
+                        print(x);
+                        print(v);
+                        print(i)
+                    end
+                    """
+                  , [ "10", "5", "1" ]
+                  )
+                ]
 
 
 testValue : ( String, Value ) -> Test
@@ -317,12 +334,32 @@ testValue ( input, expectedValue ) =
     test input <|
         \_ ->
             case I.run input of
-                Ok actualValue ->
+                ( Ok actualValue, _ ) ->
                     if expectedValue == actualValue then
                         Expect.pass
 
                     else
                         Expect.fail <| "expected = " ++ Debug.toString expectedValue ++ ", actual = " ++ Debug.toString actualValue
 
-                Err e ->
+                ( Err e, _ ) ->
+                    Expect.fail <| Debug.toString e
+
+
+testOutput : ( String, List String ) -> Test
+testOutput ( input, expectedOutput ) =
+    test input <|
+        \_ ->
+            case I.run input of
+                ( Ok _, { output } ) ->
+                    let
+                        actualOutput =
+                            Output.toList output
+                    in
+                    if expectedOutput == actualOutput then
+                        Expect.pass
+
+                    else
+                        Expect.fail <| "expected = " ++ Debug.toString expectedOutput ++ ", actual = " ++ Debug.toString actualOutput
+
+                ( Err e, _ ) ->
                     Expect.fail <| Debug.toString e

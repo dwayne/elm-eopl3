@@ -1,4 +1,4 @@
-module Ch5.THREADS.Interpreter exposing (Value(..), run)
+module Ch5.THREADS.Interpreter exposing (State, Value(..), run)
 
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch5.THREADS.AST as AST exposing (..)
@@ -15,7 +15,7 @@ import Ch5.THREADS.Parser as P
 -- [x] Remove Eval and implement the store-passing interpreter explicitly
 -- [x] Refactor the interpreter to use continuations
 -- [x] Add cons, car, cdr, null?, emptylist, list
--- [ ] Add print (WIP)
+-- [x] Add print
 -- [ ] Add a queue
 -- [ ] Represent a thread
 -- [ ] Add a scheduler
@@ -38,6 +38,12 @@ type alias Env =
 
 type alias Store =
     Store.Store Value
+
+
+type alias State =
+    { store : Store
+    , output : Output
+    }
 
 
 type Procedure
@@ -68,50 +74,21 @@ type RuntimeError
     | UnexpectedError String
 
 
-run : String -> Result Error Value
+run : String -> ( Result Error Value, State )
 run input =
-    case P.parse input of
-        Ok program ->
-            evalProgram program
-                |> Result.mapError RuntimeError
-
-        Err err ->
-            Err <| SyntaxError err
-
-
-type Continuation
-    = EndCont
-    | ZeroCont Continuation
-    | LetCont Id Expr Env Continuation
-    | IfCont Expr Expr Env Continuation
-    | Diff1Cont Expr Env Continuation
-    | Diff2Cont Value Continuation
-    | Cons1Cont Expr Env Continuation
-    | Cons2Cont Value Continuation
-    | CarCont Continuation
-    | CdrCont Continuation
-    | NullCont Continuation
-    | ListCont (List Value) (List Expr) Env Continuation
-    | RatorCont Expr Env Continuation
-    | RandCont Procedure Continuation
-    | SetCont Id Env Continuation
-    | SequenceCont (List Expr) Env Continuation
-
-
-type alias State =
-    { store : Store
-    , output : Output
-    }
-
-
-evalProgram : AST.Program -> Result RuntimeError Value
-evalProgram (Program expr) =
     let
         ( initEnv, initState ) =
             initEnvAndState
     in
-    evalExpr expr initEnv EndCont initState
-        |> Tuple.first
+    case P.parse input of
+        Ok program ->
+            evalProgram initEnv initState program
+                |> Tuple.mapFirst (Result.mapError RuntimeError)
+
+        Err err ->
+            ( Err <| SyntaxError err
+            , initState
+            )
 
 
 initEnvAndState : ( Env, State )
@@ -135,6 +112,31 @@ initEnvAndState =
         |> Env.extend "i" iRef
     , State store3 Output.empty
     )
+
+
+type Continuation
+    = EndCont
+    | ZeroCont Continuation
+    | LetCont Id Expr Env Continuation
+    | IfCont Expr Expr Env Continuation
+    | Diff1Cont Expr Env Continuation
+    | Diff2Cont Value Continuation
+    | Cons1Cont Expr Env Continuation
+    | Cons2Cont Value Continuation
+    | CarCont Continuation
+    | CdrCont Continuation
+    | NullCont Continuation
+    | ListCont (List Value) (List Expr) Env Continuation
+    | RatorCont Expr Env Continuation
+    | RandCont Procedure Continuation
+    | SetCont Id Env Continuation
+    | SequenceCont (List Expr) Env Continuation
+    | PrintCont Continuation
+
+
+evalProgram : Env -> State -> AST.Program -> ( Result RuntimeError Value, State )
+evalProgram env state (Program expr) =
+    evalExpr expr env EndCont state
 
 
 evalExpr : Expr -> Env -> Continuation -> State -> ( Result RuntimeError Value, State )
@@ -225,8 +227,8 @@ evalExpr expr env cont state =
         Begin firstExpr restExprs ->
             evalExpr firstExpr env (SequenceCont restExprs env cont) state
 
-        Print _ ->
-            Debug.todo "Implement Print"
+        Print e ->
+            evalExpr e env (PrintCont cont) state
 
 
 applyCont : Continuation -> ( Result RuntimeError Value, State ) -> ( Result RuntimeError Value, State )
@@ -474,6 +476,24 @@ applyCont cont ( result, state ) =
                 expr :: restExprs ->
                     evalExpr expr env (SequenceCont restExprs env nextCont) state
 
+        PrintCont nextCont ->
+            case result of
+                Ok value ->
+                    let
+                        output1 =
+                            Output.print (toString value) state.output
+                    in
+                    applyCont nextCont
+                        ( Ok VUnit
+                        , { state | output = output1 }
+                        )
+
+                Err _ ->
+                    applyCont nextCont
+                        ( result
+                        , state
+                        )
+
 
 evalDiff : Value -> Value -> Result RuntimeError Value
 evalDiff va vb =
@@ -629,6 +649,35 @@ typeOf v =
 
         VProcedure _ ->
             TProcedure
+
+
+toString : Value -> String
+toString v =
+    case v of
+        VUnit ->
+            "()"
+
+        VNumber n ->
+            String.fromInt n
+
+        VBool b ->
+            if b then
+                "true"
+
+            else
+                "false"
+
+        VList list ->
+            String.concat
+                [ "["
+                , list
+                    |> List.map toString
+                    |> String.join ", "
+                , "]"
+                ]
+
+        VProcedure _ ->
+            "<<proc>>"
 
 
 
