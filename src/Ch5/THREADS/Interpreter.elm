@@ -14,7 +14,7 @@ import Ch5.THREADS.Parser as P
 -- [x] Remove Eval and implement the store-passing interpreter explicitly
 -- [x] Refactor the interpreter to use continuations
 -- [x] Add cons, car, cdr, null?, emptylist, list
--- [ ] Add print
+-- [ ] Add print (WIP)
 -- [ ] Add a queue
 -- [ ] Represent a thread
 -- [ ] Add a scheduler
@@ -217,6 +217,9 @@ evalExpr expr env cont store0 =
 
         Begin firstExpr restExprs ->
             evalExpr firstExpr env (SequenceCont restExprs env cont) store0
+
+        Print _ ->
+            Debug.todo "Implement Print"
 
 
 applyCont : Continuation -> ( Result RuntimeError Value, Store ) -> ( Result RuntimeError Value, Store )

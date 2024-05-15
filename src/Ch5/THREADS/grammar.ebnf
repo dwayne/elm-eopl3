@@ -12,6 +12,7 @@ Expr    ::= Const
           | Call
           | Set
           | Begin
+          | Print
 
 Const   ::= Number
 Var     ::= Id
@@ -33,6 +34,7 @@ Call    ::= '(' Expr Expr ')'
 
 Set     ::= 'set' Id '=' Expr
 Begin   ::= 'begin' Expr { ';' Expr  }* 'end'
+Print   ::= 'print' '(' Expr ')'
 
 Number  ::= [0-9]+
 Id      ::= [a-z]+

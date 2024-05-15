@@ -41,6 +41,7 @@ expr =
         , callExpr
         , setExpr
         , beginExpr
+        , printExpr
         , constExpr
         , varExpr
         ]
@@ -216,6 +217,15 @@ beginExpr =
         |. L.keyword "end"
 
 
+printExpr : Parser Expr
+printExpr =
+    P.succeed Print
+        |. L.keyword "print"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -252,6 +262,7 @@ id =
                 , "list"
                 , "null?"
                 , "proc"
+                , "print"
                 , "set"
                 , "then"
                 , "zero?"

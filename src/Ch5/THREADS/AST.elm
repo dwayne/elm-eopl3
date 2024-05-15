@@ -29,6 +29,7 @@ type Expr
     | Call Expr Expr
     | Set Id Expr
     | Begin Expr (List Expr)
+    | Print Expr
 
 
 type alias Procrec =
