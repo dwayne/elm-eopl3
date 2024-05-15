@@ -16,7 +16,7 @@ import Ch5.THREADS.Parser as P
 -- [x] Refactor the interpreter to use continuations
 -- [x] Add cons, car, cdr, null?, emptylist, list
 -- [x] Add print
--- [ ] Add a queue
+-- [x] Implement a queue data structure
 -- [ ] Represent a thread
 -- [ ] Add a scheduler
 -- [ ] Add a spawn expression
