@@ -3,6 +3,7 @@ module Ch5.THREADS.Interpreter exposing (Value(..), run)
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch5.THREADS.AST as AST exposing (..)
 import Ch5.THREADS.Env as Env
+import Ch5.THREADS.Output as Output exposing (Output)
 import Ch5.THREADS.Parser as P
 
 
@@ -97,18 +98,24 @@ type Continuation
     | SequenceCont (List Expr) Env Continuation
 
 
+type alias State =
+    { store : Store
+    , output : Output
+    }
+
+
 evalProgram : AST.Program -> Result RuntimeError Value
 evalProgram (Program expr) =
     let
-        ( initEnv, initStore ) =
-            initState
+        ( initEnv, initState ) =
+            initEnvAndState
     in
-    evalExpr expr initEnv EndCont initStore
+    evalExpr expr initEnv EndCont initState
         |> Tuple.first
 
 
-initState : ( Env, Store )
-initState =
+initEnvAndState : ( Env, State )
+initEnvAndState =
     let
         store0 =
             Store.empty
@@ -126,23 +133,23 @@ initState =
         |> Env.extend "x" xRef
         |> Env.extend "v" vRef
         |> Env.extend "i" iRef
-    , store3
+    , State store3 Output.empty
     )
 
 
-evalExpr : Expr -> Env -> Continuation -> Store -> ( Result RuntimeError Value, Store )
-evalExpr expr env cont store0 =
+evalExpr : Expr -> Env -> Continuation -> State -> ( Result RuntimeError Value, State )
+evalExpr expr env cont state =
     case expr of
         Const n ->
             applyCont cont
                 ( Ok <| VNumber n
-                , store0
+                , state
                 )
 
         Var name ->
             let
                 ( result1, store1 ) =
-                    find name env store0
+                    find name env state.store
 
                 ( result2, store2 ) =
                     case result1 of
@@ -156,31 +163,31 @@ evalExpr expr env cont store0 =
             in
             applyCont cont
                 ( result2
-                , store2
+                , { state | store = store2 }
                 )
 
         Diff a b ->
-            evalExpr a env (Diff1Cont b env cont) store0
+            evalExpr a env (Diff1Cont b env cont) state
 
         Zero a ->
-            evalExpr a env (ZeroCont cont) store0
+            evalExpr a env (ZeroCont cont) state
 
         Cons a b ->
-            evalExpr a env (Cons1Cont b env cont) store0
+            evalExpr a env (Cons1Cont b env cont) state
 
         Car a ->
-            evalExpr a env (CarCont cont) store0
+            evalExpr a env (CarCont cont) state
 
         Cdr a ->
-            evalExpr a env (CdrCont cont) store0
+            evalExpr a env (CdrCont cont) state
 
         Null a ->
-            evalExpr a env (NullCont cont) store0
+            evalExpr a env (NullCont cont) state
 
         EmptyList ->
             applyCont cont
                 ( Ok <| VList []
-                , store0
+                , state
                 )
 
         List exprs ->
@@ -188,47 +195,47 @@ evalExpr expr env cont store0 =
                 [] ->
                     applyCont cont
                         ( Ok <| VList []
-                        , store0
+                        , state
                         )
 
                 firstExpr :: restExprs ->
-                    evalExpr firstExpr env (ListCont [] restExprs env cont) store0
+                    evalExpr firstExpr env (ListCont [] restExprs env cont) state
 
         If test consequent alternative ->
-            evalExpr test env (IfCont consequent alternative env cont) store0
+            evalExpr test env (IfCont consequent alternative env cont) state
 
         Let name e body ->
-            evalExpr e env (LetCont name body env cont) store0
+            evalExpr e env (LetCont name body env cont) state
 
         Proc param body ->
             applyCont cont
                 ( Ok <| VProcedure <| Closure param body env
-                , store0
+                , state
                 )
 
         Letrec procrecs letrecBody ->
-            evalExpr letrecBody (Env.extendRec procrecs env) cont store0
+            evalExpr letrecBody (Env.extendRec procrecs env) cont state
 
         Call rator rand ->
-            evalExpr rator env (RatorCont rand env cont) store0
+            evalExpr rator env (RatorCont rand env cont) state
 
         Set name e ->
-            evalExpr e env (SetCont name env cont) store0
+            evalExpr e env (SetCont name env cont) state
 
         Begin firstExpr restExprs ->
-            evalExpr firstExpr env (SequenceCont restExprs env cont) store0
+            evalExpr firstExpr env (SequenceCont restExprs env cont) state
 
         Print _ ->
             Debug.todo "Implement Print"
 
 
-applyCont : Continuation -> ( Result RuntimeError Value, Store ) -> ( Result RuntimeError Value, Store )
-applyCont cont ( result, store0 ) =
+applyCont : Continuation -> ( Result RuntimeError Value, State ) -> ( Result RuntimeError Value, State )
+applyCont cont ( result, state ) =
     case cont of
         EndCont ->
             ( result
                 |> Debug.log "End of computation"
-            , store0
+            , state
             )
 
         ZeroCont nextCont ->
@@ -236,13 +243,13 @@ applyCont cont ( result, store0 ) =
                 Ok va ->
                     applyCont nextCont
                         ( evalZero va
-                        , store0
+                        , state
                         )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         LetCont name body env nextCont ->
@@ -250,44 +257,47 @@ applyCont cont ( result, store0 ) =
                 Ok ve ->
                     let
                         ( resultRef, store1 ) =
-                            newref ve store0
+                            newref ve state.store
+
+                        newState =
+                            { state | store = store1 }
                     in
                     case resultRef of
                         Ok ref ->
-                            evalExpr body (Env.extend name ref env) nextCont store1
+                            evalExpr body (Env.extend name ref env) nextCont newState
 
                         Err err ->
                             applyCont nextCont
                                 ( Err err
-                                , store1
+                                , newState
                                 )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         IfCont consequent alternative env nextCont ->
             case result of
                 Ok vTest ->
-                    evalIf vTest consequent alternative env nextCont store0
+                    evalIf vTest consequent alternative env nextCont state
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         Diff1Cont b env nextCont ->
             case result of
                 Ok va ->
-                    evalExpr b env (Diff2Cont va nextCont) store0
+                    evalExpr b env (Diff2Cont va nextCont) state
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         Diff2Cont va nextCont ->
@@ -295,24 +305,24 @@ applyCont cont ( result, store0 ) =
                 Ok vb ->
                     applyCont nextCont
                         ( evalDiff va vb
-                        , store0
+                        , state
                         )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         Cons1Cont b env nextCont ->
             case result of
                 Ok va ->
-                    evalExpr b env (Cons2Cont va nextCont) store0
+                    evalExpr b env (Cons2Cont va nextCont) state
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         Cons2Cont va nextCont ->
@@ -320,13 +330,13 @@ applyCont cont ( result, store0 ) =
                 Ok vb ->
                     applyCont nextCont
                         ( evalCons va vb
-                        , store0
+                        , state
                         )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         CarCont nextCont ->
@@ -334,13 +344,13 @@ applyCont cont ( result, store0 ) =
                 Ok va ->
                     applyCont nextCont
                         ( evalCar va
-                        , store0
+                        , state
                         )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         CdrCont nextCont ->
@@ -348,13 +358,13 @@ applyCont cont ( result, store0 ) =
                 Ok va ->
                     applyCont nextCont
                         ( evalCdr va
-                        , store0
+                        , state
                         )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         NullCont nextCont ->
@@ -362,13 +372,13 @@ applyCont cont ( result, store0 ) =
                 Ok va ->
                     applyCont nextCont
                         ( evalNull va
-                        , store0
+                        , state
                         )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         ListCont prevRevValues exprs env nextCont ->
@@ -382,16 +392,16 @@ applyCont cont ( result, store0 ) =
                         [] ->
                             applyCont nextCont
                                 ( Ok <| VList <| List.reverse revValues
-                                , store0
+                                , state
                                 )
 
                         firstExpr :: restExprs ->
-                            evalExpr firstExpr env (ListCont revValues restExprs env nextCont) store0
+                            evalExpr firstExpr env (ListCont revValues restExprs env nextCont) state
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         RatorCont rand env nextCont ->
@@ -403,29 +413,29 @@ applyCont cont ( result, store0 ) =
                     in
                     case resultF of
                         Ok f ->
-                            evalExpr rand env (RandCont f nextCont) store0
+                            evalExpr rand env (RandCont f nextCont) state
 
                         Err err ->
                             applyCont nextCont
                                 ( Err err
-                                , store0
+                                , state
                                 )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         RandCont f nextCont ->
             case result of
                 Ok vRand ->
-                    applyProcedure f vRand nextCont store0
+                    applyProcedure f vRand nextCont state
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         SetCont name env nextCont ->
@@ -433,23 +443,24 @@ applyCont cont ( result, store0 ) =
                 Ok ve ->
                     let
                         ( findResult, store1 ) =
-                            find name env store0
+                            find name env state.store
                     in
                     case findResult of
                         Ok ref ->
-                            applyCont nextCont <|
-                                setref ve ref store1
+                            setref ve ref store1
+                                |> Tuple.mapSecond (\store2 -> { state | store = store2 })
+                                |> applyCont nextCont
 
                         Err err ->
                             applyCont nextCont
                                 ( Err err
-                                , store1
+                                , { state | store = store1 }
                                 )
 
                 Err _ ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
         SequenceCont exprs env nextCont ->
@@ -457,11 +468,11 @@ applyCont cont ( result, store0 ) =
                 [] ->
                     applyCont nextCont
                         ( result
-                        , store0
+                        , state
                         )
 
                 expr :: restExprs ->
-                    evalExpr expr env (SequenceCont restExprs env nextCont) store0
+                    evalExpr expr env (SequenceCont restExprs env nextCont) state
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
@@ -492,15 +503,15 @@ evalZero va =
                     }
 
 
-evalIf : Value -> Expr -> Expr -> Env -> Continuation -> Store -> ( Result RuntimeError Value, Store )
-evalIf vTest consequent alternative env cont store =
+evalIf : Value -> Expr -> Expr -> Env -> Continuation -> State -> ( Result RuntimeError Value, State )
+evalIf vTest consequent alternative env cont state =
     case vTest of
         VBool b ->
             if b then
-                evalExpr consequent env cont store
+                evalExpr consequent env cont state
 
             else
-                evalExpr alternative env cont store
+                evalExpr alternative env cont state
 
         _ ->
             applyCont cont
@@ -509,7 +520,7 @@ evalIf vTest consequent alternative env cont store =
                         { expected = [ TBool ]
                         , actual = [ typeOf vTest ]
                         }
-                , store
+                , state
                 )
 
 
@@ -553,20 +564,23 @@ evalNull va =
         |> Result.map (VBool << List.isEmpty)
 
 
-applyProcedure : Procedure -> Value -> Continuation -> Store -> ( Result RuntimeError Value, Store )
-applyProcedure (Closure param body savedEnv) value cont store0 =
+applyProcedure : Procedure -> Value -> Continuation -> State -> ( Result RuntimeError Value, State )
+applyProcedure (Closure param body savedEnv) value cont state =
     let
         ( result, store1 ) =
-            newref value store0
+            newref value state.store
+
+        newState =
+            { state | store = store1 }
     in
     case result of
         Ok ref ->
-            evalExpr body (Env.extend param ref savedEnv) cont store1
+            evalExpr body (Env.extend param ref savedEnv) cont newState
 
         Err err ->
             applyCont cont
                 ( Err err
-                , store1
+                , newState
                 )
 
 
