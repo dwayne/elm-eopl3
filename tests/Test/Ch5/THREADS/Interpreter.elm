@@ -1,6 +1,6 @@
 module Test.Ch5.THREADS.Interpreter exposing (suite)
 
-import Ch5.THREADS.Interpreter as I exposing (Value(..))
+import Ch5.THREADS.Interpreter as I exposing (State(..), Value(..))
 import Ch5.THREADS.Output as Output
 import Expect exposing (Expectation)
 import Test exposing (Test, describe, test)
@@ -315,7 +315,7 @@ suite =
                 [ ( """
                     print(x)
                     """
-                  , [ "10" ]
+                  , [ "10", "End of main thread computation" ]
                   )
                 , ( """
                     begin
@@ -324,7 +324,7 @@ suite =
                         print(i)
                     end
                     """
-                  , [ "10", "5", "1" ]
+                  , [ "10", "5", "1", "End of main thread computation" ]
                   )
                 ]
 
@@ -333,7 +333,7 @@ testValue : ( String, Value ) -> Test
 testValue ( input, expectedValue ) =
     test input <|
         \_ ->
-            case I.run input of
+            case I.run 10 input of
                 ( Ok actualValue, _ ) ->
                     if expectedValue == actualValue then
                         Expect.pass
@@ -349,8 +349,8 @@ testOutput : ( String, List String ) -> Test
 testOutput ( input, expectedOutput ) =
     test input <|
         \_ ->
-            case I.run input of
-                ( Ok _, { output } ) ->
+            case I.run 10 input of
+                ( Ok _, State { output } ) ->
                     let
                         actualOutput =
                             Output.toList output

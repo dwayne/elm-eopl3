@@ -64,7 +64,7 @@ tick (Scheduler state) =
         }
 
 
-runNextThread : Scheduler a -> ( Maybe a, Scheduler a )
+runNextThread : Scheduler a -> Maybe ( a, Scheduler a )
 runNextThread ((Scheduler state) as scheduler) =
     let
         ( maybeThread, readyQueue ) =
@@ -72,15 +72,20 @@ runNextThread ((Scheduler state) as scheduler) =
     in
     case maybeThread of
         Just thread ->
-            ( Just <| Thread.run thread
-            , Scheduler
-                { state
-                    | readyQueue = readyQueue
-                    , timeRemaining = state.maxTimeSlice
-                }
-            )
+            Just
+                ( Thread.run thread
+                , Scheduler
+                    { state
+                        | readyQueue = readyQueue
+                        , timeRemaining = state.maxTimeSlice
+                    }
+                )
 
         Nothing ->
-            ( state.maybeFinalAnswer
-            , scheduler
-            )
+            state.maybeFinalAnswer
+                |> Maybe.map
+                    (\finalAnswer ->
+                        ( finalAnswer
+                        , scheduler
+                        )
+                    )

@@ -1,10 +1,17 @@
-module Ch5.THREADS.Interpreter exposing (State, Value(..), run)
+module Ch5.THREADS.Interpreter exposing
+    ( Error(..)
+    , State(..)
+    , Value(..)
+    , run
+    )
 
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch5.THREADS.AST as AST exposing (..)
 import Ch5.THREADS.Env as Env
 import Ch5.THREADS.Output as Output exposing (Output)
 import Ch5.THREADS.Parser as P
+import Ch5.THREADS.Scheduler as Scheduler exposing (Scheduler)
+import Ch5.THREADS.Thread as Thread exposing (Thread)
 
 
 
@@ -20,7 +27,7 @@ import Ch5.THREADS.Parser as P
 -- [x] Represent a thread
 -- [x] Add a scheduler
 -- [x] Add spawn syntax
--- [ ] Implement THREADS
+-- [x] Implement THREADS
 --
 
 
@@ -40,10 +47,12 @@ type alias Store =
     Store.Store Value
 
 
-type alias State =
-    { store : Store
-    , output : Output
-    }
+type State
+    = State
+        { store : Store
+        , scheduler : Scheduler (State -> ( Result RuntimeError Value, State ))
+        , output : Output
+        }
 
 
 type Procedure
@@ -74,11 +83,11 @@ type RuntimeError
     | UnexpectedError String
 
 
-run : String -> ( Result Error Value, State )
-run input =
+run : Int -> String -> ( Result Error Value, State )
+run maxTimeSlice input =
     let
         ( initEnv, initState ) =
-            initEnvAndState
+            initEnvAndState maxTimeSlice
     in
     case P.parse input of
         Ok program ->
@@ -91,8 +100,8 @@ run input =
             )
 
 
-initEnvAndState : ( Env, State )
-initEnvAndState =
+initEnvAndState : Int -> ( Env, State )
+initEnvAndState maxTimeSlice =
     let
         store0 =
             Store.empty
@@ -110,12 +119,17 @@ initEnvAndState =
         |> Env.extend "x" xRef
         |> Env.extend "v" vRef
         |> Env.extend "i" iRef
-    , State store3 Output.empty
+    , State
+        { store = store3
+        , scheduler = Scheduler.new maxTimeSlice
+        , output = Output.empty
+        }
     )
 
 
 type Continuation
-    = EndCont
+    = EndMainThreadCont
+    | EndSubThreadCont
     | ZeroCont Continuation
     | LetCont Id Expr Env Continuation
     | IfCont Expr Expr Env Continuation
@@ -132,11 +146,12 @@ type Continuation
     | SetCont Id Env Continuation
     | SequenceCont (List Expr) Env Continuation
     | PrintCont Continuation
+    | SpawnCont Continuation
 
 
 evalProgram : Env -> State -> AST.Program -> ( Result RuntimeError Value, State )
 evalProgram env state (Program expr) =
-    evalExpr expr env EndCont state
+    evalExpr expr env EndMainThreadCont state
 
 
 evalExpr : Expr -> Env -> Continuation -> State -> ( Result RuntimeError Value, State )
@@ -150,22 +165,22 @@ evalExpr expr env cont state =
 
         Var name ->
             let
-                ( result1, store1 ) =
-                    find name env state.store
+                ( result1, state1 ) =
+                    find name env state
 
-                ( result2, store2 ) =
+                ( result2, state2 ) =
                     case result1 of
                         Ok ref ->
-                            deref ref store1
+                            deref ref state1
 
                         Err err ->
                             ( Err err
-                            , store1
+                            , state1
                             )
             in
             applyCont cont
                 ( result2
-                , { state | store = store2 }
+                , state2
                 )
 
         Diff a b ->
@@ -231,271 +246,324 @@ evalExpr expr env cont state =
             evalExpr e env (PrintCont cont) state
 
         Spawn e ->
-            Debug.todo "Implement Spawn"
+            evalExpr e env (SpawnCont cont) state
 
 
 applyCont : Continuation -> ( Result RuntimeError Value, State ) -> ( Result RuntimeError Value, State )
-applyCont cont ( result, state ) =
-    case cont of
-        EndCont ->
-            ( result
-                |> Debug.log "End of computation"
-            , state
-            )
+applyCont cont ( result, state0 ) =
+    if isTimeExpired state0 then
+        let
+            state1 =
+                schedule thread state0
 
-        ZeroCont nextCont ->
-            case result of
-                Ok va ->
-                    applyCont nextCont
-                        ( evalZero va
-                        , state
-                        )
+            thread =
+                Thread.new
+                    (\_ ->
+                        \s -> applyCont cont ( result, s )
+                    )
+        in
+        runNextThread state1
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+    else
+        let
+            state =
+                tick state0
+        in
+        case cont of
+            EndMainThreadCont ->
+                let
+                    state1 =
+                        print "End of main thread computation" state
 
-        LetCont name body env nextCont ->
-            case result of
-                Ok ve ->
-                    let
-                        ( resultRef, store1 ) =
-                            newref ve state.store
+                    state2 =
+                        setFinalAnswer (\s -> ( result, s )) state1
+                in
+                runNextThread state2
 
-                        newState =
-                            { state | store = store1 }
-                    in
-                    case resultRef of
-                        Ok ref ->
-                            evalExpr body (Env.extend name ref env) nextCont newState
+            EndSubThreadCont ->
+                let
+                    state1 =
+                        print "End of sub-thread computation" state
+                in
+                runNextThread state1
 
-                        Err err ->
-                            applyCont nextCont
-                                ( Err err
-                                , newState
-                                )
+            ZeroCont nextCont ->
+                case result of
+                    Ok va ->
+                        applyCont nextCont
+                            ( evalZero va
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-        IfCont consequent alternative env nextCont ->
-            case result of
-                Ok vTest ->
-                    evalIf vTest consequent alternative env nextCont state
+            LetCont name body env nextCont ->
+                case result of
+                    Ok ve ->
+                        let
+                            ( resultRef, state1 ) =
+                                newref ve state
+                        in
+                        case resultRef of
+                            Ok ref ->
+                                evalExpr body (Env.extend name ref env) nextCont state1
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+                            Err err ->
+                                applyCont nextCont
+                                    ( Err err
+                                    , state1
+                                    )
 
-        Diff1Cont b env nextCont ->
-            case result of
-                Ok va ->
-                    evalExpr b env (Diff2Cont va nextCont) state
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            IfCont consequent alternative env nextCont ->
+                case result of
+                    Ok vTest ->
+                        evalIf vTest consequent alternative env nextCont state
 
-        Diff2Cont va nextCont ->
-            case result of
-                Ok vb ->
-                    applyCont nextCont
-                        ( evalDiff va vb
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            Diff1Cont b env nextCont ->
+                case result of
+                    Ok va ->
+                        evalExpr b env (Diff2Cont va nextCont) state
 
-        Cons1Cont b env nextCont ->
-            case result of
-                Ok va ->
-                    evalExpr b env (Cons2Cont va nextCont) state
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            Diff2Cont va nextCont ->
+                case result of
+                    Ok vb ->
+                        applyCont nextCont
+                            ( evalDiff va vb
+                            , state
+                            )
 
-        Cons2Cont va nextCont ->
-            case result of
-                Ok vb ->
-                    applyCont nextCont
-                        ( evalCons va vb
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            Cons1Cont b env nextCont ->
+                case result of
+                    Ok va ->
+                        evalExpr b env (Cons2Cont va nextCont) state
 
-        CarCont nextCont ->
-            case result of
-                Ok va ->
-                    applyCont nextCont
-                        ( evalCar va
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            Cons2Cont va nextCont ->
+                case result of
+                    Ok vb ->
+                        applyCont nextCont
+                            ( evalCons va vb
+                            , state
+                            )
 
-        CdrCont nextCont ->
-            case result of
-                Ok va ->
-                    applyCont nextCont
-                        ( evalCdr va
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            CarCont nextCont ->
+                case result of
+                    Ok va ->
+                        applyCont nextCont
+                            ( evalCar va
+                            , state
+                            )
 
-        NullCont nextCont ->
-            case result of
-                Ok va ->
-                    applyCont nextCont
-                        ( evalNull va
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            CdrCont nextCont ->
+                case result of
+                    Ok va ->
+                        applyCont nextCont
+                            ( evalCdr va
+                            , state
+                            )
 
-        ListCont prevRevValues exprs env nextCont ->
-            case result of
-                Ok value ->
-                    let
-                        revValues =
-                            value :: prevRevValues
-                    in
-                    case exprs of
-                        [] ->
-                            applyCont nextCont
-                                ( Ok <| VList <| List.reverse revValues
-                                , state
-                                )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                        firstExpr :: restExprs ->
-                            evalExpr firstExpr env (ListCont revValues restExprs env nextCont) state
+            NullCont nextCont ->
+                case result of
+                    Ok va ->
+                        applyCont nextCont
+                            ( evalNull va
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-        RatorCont rand env nextCont ->
-            case result of
-                Ok vRator ->
-                    let
-                        resultF =
-                            toProcedure vRator
-                    in
-                    case resultF of
-                        Ok f ->
-                            evalExpr rand env (RandCont f nextCont) state
+            ListCont prevRevValues exprs env nextCont ->
+                case result of
+                    Ok value ->
+                        let
+                            revValues =
+                                value :: prevRevValues
+                        in
+                        case exprs of
+                            [] ->
+                                applyCont nextCont
+                                    ( Ok <| VList <| List.reverse revValues
+                                    , state
+                                    )
 
-                        Err err ->
-                            applyCont nextCont
-                                ( Err err
-                                , state
-                                )
+                            firstExpr :: restExprs ->
+                                evalExpr firstExpr env (ListCont revValues restExprs env nextCont) state
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-        RandCont f nextCont ->
-            case result of
-                Ok vRand ->
-                    applyProcedure f vRand nextCont state
+            RatorCont rand env nextCont ->
+                case result of
+                    Ok vRator ->
+                        let
+                            resultF =
+                                toProcedure vRator
+                        in
+                        case resultF of
+                            Ok f ->
+                                evalExpr rand env (RandCont f nextCont) state
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+                            Err err ->
+                                applyCont nextCont
+                                    ( Err err
+                                    , state
+                                    )
 
-        SetCont name env nextCont ->
-            case result of
-                Ok ve ->
-                    let
-                        ( findResult, store1 ) =
-                            find name env state.store
-                    in
-                    case findResult of
-                        Ok ref ->
-                            setref ve ref store1
-                                |> Tuple.mapSecond (\store2 -> { state | store = store2 })
-                                |> applyCont nextCont
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                        Err err ->
-                            applyCont nextCont
-                                ( Err err
-                                , { state | store = store1 }
-                                )
+            RandCont f nextCont ->
+                case result of
+                    Ok vRand ->
+                        applyProcedure f vRand nextCont state
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-        SequenceCont exprs env nextCont ->
-            case exprs of
-                [] ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            SetCont name env nextCont ->
+                case result of
+                    Ok ve ->
+                        let
+                            ( findResult, state1 ) =
+                                find name env state
+                        in
+                        case findResult of
+                            Ok ref ->
+                                setref ve ref state1
+                                    |> applyCont nextCont
 
-                expr :: restExprs ->
-                    evalExpr expr env (SequenceCont restExprs env nextCont) state
+                            Err err ->
+                                applyCont nextCont
+                                    ( Err err
+                                    , state1
+                                    )
 
-        PrintCont nextCont ->
-            case result of
-                Ok value ->
-                    let
-                        output1 =
-                            Output.print (toString value) state.output
-                    in
-                    applyCont nextCont
-                        ( Ok VUnit
-                        , { state | output = output1 }
-                        )
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
-                Err _ ->
-                    applyCont nextCont
-                        ( result
-                        , state
-                        )
+            SequenceCont exprs env nextCont ->
+                case exprs of
+                    [] ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
+
+                    expr :: restExprs ->
+                        evalExpr expr env (SequenceCont restExprs env nextCont) state
+
+            PrintCont nextCont ->
+                case result of
+                    Ok value ->
+                        applyCont nextCont
+                            ( Ok VUnit
+                            , printValue value state
+                            )
+
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
+
+            SpawnCont nextCont ->
+                case result of
+                    Ok value ->
+                        case toProcedure value of
+                            Ok f ->
+                                let
+                                    state1 =
+                                        schedule thread state
+
+                                    thread =
+                                        Thread.new
+                                            (\_ ->
+                                                applyProcedure f VUnit EndSubThreadCont
+                                            )
+                                in
+                                applyCont nextCont
+                                    ( Ok VUnit
+                                    , state1
+                                    )
+
+                            Err err ->
+                                applyCont nextCont
+                                    ( Err err
+                                    , state
+                                    )
+
+                    Err _ ->
+                        applyCont nextCont
+                            ( result
+                            , state
+                            )
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
@@ -590,20 +658,17 @@ evalNull va =
 applyProcedure : Procedure -> Value -> Continuation -> State -> ( Result RuntimeError Value, State )
 applyProcedure (Closure param body savedEnv) value cont state =
     let
-        ( result, store1 ) =
-            newref value state.store
-
-        newState =
-            { state | store = store1 }
+        ( result, state1 ) =
+            newref value state
     in
     case result of
         Ok ref ->
-            evalExpr body (Env.extend param ref savedEnv) cont newState
+            evalExpr body (Env.extend param ref savedEnv) cont state1
 
         Err err ->
             applyCont cont
                 ( Err err
-                , newState
+                , state1
                 )
 
 
@@ -684,32 +749,98 @@ toString v =
 
 
 
+-- SCHEDULER
+
+
+schedule : Thread (State -> ( Result RuntimeError Value, State )) -> State -> State
+schedule thread (State state) =
+    State
+        { state
+            | scheduler = Scheduler.schedule thread state.scheduler
+        }
+
+
+setFinalAnswer : (State -> ( Result RuntimeError Value, State )) -> State -> State
+setFinalAnswer finalAnswer (State state) =
+    State
+        { state
+            | scheduler = Scheduler.setFinalAnswer finalAnswer state.scheduler
+        }
+
+
+isTimeExpired : State -> Bool
+isTimeExpired (State { scheduler }) =
+    Scheduler.isTimeExpired scheduler
+
+
+tick : State -> State
+tick (State state) =
+    State
+        { state
+            | scheduler = Scheduler.tick state.scheduler
+        }
+
+
+runNextThread : State -> ( Result RuntimeError Value, State )
+runNextThread (State state) =
+    case Scheduler.runNextThread state.scheduler of
+        Just ( f, scheduler ) ->
+            let
+                state1 =
+                    State { state | scheduler = scheduler }
+            in
+            f state1
+
+        Nothing ->
+            ( Err <| UnexpectedError "finalAnswer is missing"
+            , State state
+            )
+
+
+
+-- OUTPUT
+
+
+printValue : Value -> State -> State
+printValue value =
+    print <| toString value
+
+
+print : String -> State -> State
+print s (State state) =
+    State
+        { state
+            | output = Output.print s state.output
+        }
+
+
+
 -- ENV
 
 
-find : Id -> Env -> Store -> ( Result RuntimeError Ref, Store )
-find name env store0 =
+find : Id -> Env -> State -> ( Result RuntimeError Ref, State )
+find name env (State state) =
     let
         findOptions =
             { needle = name
             , toClosure = toClosure
-            , store0 = store0
+            , store0 = state.store
             }
     in
     case Env.find findOptions env of
         Just (Env.Ref ref) ->
             ( Ok ref
-            , store0
+            , State state
             )
 
-        Just (Env.Procedure ref store1) ->
+        Just (Env.Procedure ref store) ->
             ( Ok ref
-            , store1
+            , State { state | store = store }
             )
 
         Nothing ->
             ( Err <| IdentifierNotFound name
-            , store0
+            , State state
             )
 
 
@@ -722,33 +853,33 @@ toClosure param body savedEnv =
 -- STORE
 
 
-newref : Value -> Store -> ( Result RuntimeError Ref, Store )
-newref v store0 =
+newref : Value -> State -> ( Result RuntimeError Ref, State )
+newref v (State state) =
     let
-        ( ref, store1 ) =
-            Store.newref v store0
+        ( ref, store ) =
+            Store.newref v state.store
     in
     ( Ok ref
-    , store1
+    , State { state | store = store }
     )
 
 
-deref : Ref -> Store -> ( Result RuntimeError Value, Store )
-deref ref store =
+deref : Ref -> State -> ( Result RuntimeError Value, State )
+deref ref ((State { store }) as state) =
     case Store.deref ref store of
         Just v ->
             ( Ok v
-            , store
+            , state
             )
 
         Nothing ->
             ( Err <| UnexpectedError <| "reference not found: " ++ Store.refToString ref
-            , store
+            , state
             )
 
 
-setref : Value -> Ref -> Store -> ( Result RuntimeError Value, Store )
-setref v ref store =
+setref : Value -> Ref -> State -> ( Result RuntimeError Value, State )
+setref v ref (State state) =
     ( Ok VUnit
-    , Store.setref ref v store
+    , State { state | store = Store.setref ref v state.store }
     )
