@@ -19,8 +19,8 @@ import Ch5.THREADS.Parser as P
 -- [x] Implement a queue data structure
 -- [x] Represent a thread
 -- [x] Add a scheduler
--- [ ] Add a spawn expression
--- [ ] Interpret the spawn expression
+-- [x] Add spawn syntax
+-- [ ] Implement THREADS
 --
 
 
@@ -229,6 +229,9 @@ evalExpr expr env cont state =
 
         Print e ->
             evalExpr e env (PrintCont cont) state
+
+        Spawn e ->
+            Debug.todo "Implement Spawn"
 
 
 applyCont : Continuation -> ( Result RuntimeError Value, State ) -> ( Result RuntimeError Value, State )

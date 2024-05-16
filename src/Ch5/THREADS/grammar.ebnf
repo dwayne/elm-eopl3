@@ -13,6 +13,7 @@ Expr    ::= Const
           | Set
           | Begin
           | Print
+          | Spawn
 
 Const   ::= Number
 Var     ::= Id
@@ -35,6 +36,8 @@ Call    ::= '(' Expr Expr ')'
 Set     ::= 'set' Id '=' Expr
 Begin   ::= 'begin' Expr { ';' Expr  }* 'end'
 Print   ::= 'print' '(' Expr ')'
+
+Spawn   ::= 'spawn' '(' Expr ')'
 
 Number  ::= [0-9]+
 Id      ::= [a-z]+

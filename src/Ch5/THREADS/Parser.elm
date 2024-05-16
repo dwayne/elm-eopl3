@@ -42,6 +42,7 @@ expr =
         , setExpr
         , beginExpr
         , printExpr
+        , spawnExpr
         , constExpr
         , varExpr
         ]
@@ -226,6 +227,15 @@ printExpr =
         |. L.symbol ")"
 
 
+spawnExpr : Parser Expr
+spawnExpr =
+    P.succeed Spawn
+        |. L.keyword "spawn"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -264,6 +274,7 @@ id =
                 , "proc"
                 , "print"
                 , "set"
+                , "spawn"
                 , "then"
                 , "zero?"
                 ]
