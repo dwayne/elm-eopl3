@@ -71,7 +71,7 @@ zeroExpr =
 consExpr : Parser Expr
 consExpr =
     P.succeed Cons
-        |. L.symbol "cons"
+        |. L.keyword "cons"
         |. L.symbol "("
         |= P.lazy (\_ -> expr)
         |. L.symbol ","
