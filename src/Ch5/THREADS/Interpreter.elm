@@ -18,7 +18,7 @@ import Ch5.THREADS.Parser as P
 -- [x] Add print
 -- [x] Implement a queue data structure
 -- [x] Represent a thread
--- [ ] Add a scheduler
+-- [x] Add a scheduler
 -- [ ] Add a spawn expression
 -- [ ] Interpret the spawn expression
 --
