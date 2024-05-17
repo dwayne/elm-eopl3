@@ -1,4 +1,4 @@
-module Ch5.THREADS.Examples exposing (example1, example2)
+module Ch5.THREADS.Examples exposing (example1, example2, example3)
 
 import Ch5.THREADS.Interpreter as I exposing (Error, State(..), Value)
 import Ch5.THREADS.Output as Output exposing (Output)
@@ -112,3 +112,41 @@ run maxTimeSlice input =
             I.run maxTimeSlice input
     in
     ( result, Output.toList output )
+
+
+example3 : Int -> ( Result Error Value, State )
+example3 maxTimeSlice =
+    --
+    -- Example 3: An unsafe counter.
+    --
+    """
+    let
+        x = 0
+    in
+    let
+        incrx =
+            proc (id)
+                proc (dummy)
+                    set x = -(x, -(0, 1))
+    in
+    begin
+        spawn((incrx 100));
+        spawn((incrx 200));
+        spawn((incrx 300))
+    end
+    """
+        |> I.run maxTimeSlice
+
+
+
+--
+-- Results for example3:
+--
+-- I tried example3 with maxTimeSlice = 1 to 40 and I wasn't able
+-- to make the counter become 1 or 2. It was always set to 3.
+--
+-- However, if I use `set x = -(x, -(0, -(2, 1)))` then with
+-- maxTimeSlice = 1 the final value of x is 2 and not 3. For a
+-- large enough value of maxTimeSlice, 4 in this case, the final
+-- value of x is 3.
+--
