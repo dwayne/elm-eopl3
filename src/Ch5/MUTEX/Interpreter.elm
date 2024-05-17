@@ -8,6 +8,7 @@ module Ch5.MUTEX.Interpreter exposing
 import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch4.IMPLICIT_REFS.Env as Env
 import Ch5.MUTEX.AST as AST exposing (..)
+import Ch5.MUTEX.Mutex as Mutex
 import Ch5.MUTEX.Parser as P
 import Ch5.THREADS.Output as Output exposing (Output)
 import Ch5.THREADS.Scheduler as Scheduler exposing (Scheduler)
@@ -21,7 +22,9 @@ import Ch5.THREADS.Thread as Thread exposing (Thread)
 -- [x] Start with THREADS
 -- [x] Implement a mutex data structure
 -- [x] Add syntax for mutex, wait, and signal
--- [ ] Implement MUTEX
+-- [x] Implement Mutex
+-- [ ] Implement Wait
+-- [ ] Implement Signal
 --
 
 
@@ -31,6 +34,8 @@ type Value
     | VBool Bool
     | VList (List Value)
     | VProcedure Procedure
+    | VMutex Mutex
+    | VRef Ref
 
 
 type alias Env =
@@ -53,12 +58,18 @@ type Procedure
     = Closure Id Expr Env
 
 
+type alias Mutex =
+    Mutex.Mutex (State -> ( Result RuntimeError Value, State ))
+
+
 type Type
     = TUnit
     | TNumber
     | TBool
     | TList
     | TProcedure
+    | TMutex
+    | TRef
 
 
 type Error
@@ -228,7 +239,7 @@ evalExpr expr cont env state =
             evalExpr e (SpawnCont cont) env state
 
         Mutex ->
-            Debug.todo "Implement Mutex"
+            newMutex cont state
 
         Wait _ ->
             Debug.todo "Implement Wait"
@@ -614,6 +625,12 @@ typeOf v =
         VProcedure _ ->
             TProcedure
 
+        VMutex _ ->
+            TMutex
+
+        VRef _ ->
+            TRef
+
 
 toString : Value -> String
 toString v =
@@ -643,6 +660,29 @@ toString v =
         VProcedure _ ->
             "<<proc>>"
 
+        VMutex _ ->
+            "<<mutex>>"
+
+        VRef ref ->
+            Store.refToString ref
+
+
+
+-- MUTEX
+
+
+newMutex : Continuation -> State -> ( Result RuntimeError Value, State )
+newMutex cont state =
+    let
+        ( resultRef, state1 ) =
+            newref (VMutex Mutex.new) state
+    in
+    case resultRef of
+        Ok ref ->
+            applyCont cont (Ok <| VRef ref) state1
+
+        Err err ->
+            applyCont cont (Err err) state1
 
 
 -- SCHEDULER
