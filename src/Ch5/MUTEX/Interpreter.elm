@@ -20,7 +20,7 @@ import Ch5.THREADS.Thread as Thread exposing (Thread)
 --
 -- [x] Start with THREADS
 -- [x] Implement a mutex data structure
--- [ ] Add syntax for mutex, wait, and signal
+-- [x] Add syntax for mutex, wait, and signal
 -- [ ] Implement MUTEX
 --
 
@@ -226,6 +226,15 @@ evalExpr expr cont env state =
 
         Spawn e ->
             evalExpr e (SpawnCont cont) env state
+
+        Mutex ->
+            Debug.todo "Implement Mutex"
+
+        Wait _ ->
+            Debug.todo "Implement Wait"
+
+        Signal _ ->
+            Debug.todo "Implement Signal"
 
 
 applyCont : Continuation -> Result RuntimeError Value -> State -> ( Result RuntimeError Value, State )

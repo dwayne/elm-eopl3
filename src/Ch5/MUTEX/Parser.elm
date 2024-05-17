@@ -43,6 +43,9 @@ expr =
         , beginExpr
         , printExpr
         , spawnExpr
+        , mutexExpr
+        , waitExpr
+        , signalExpr
         , constExpr
         , varExpr
         ]
@@ -236,6 +239,32 @@ spawnExpr =
         |. L.symbol ")"
 
 
+mutexExpr : Parser Expr
+mutexExpr =
+    P.succeed Mutex
+        |. L.keyword "mutex"
+        |. L.symbol "("
+        |. L.symbol ")"
+
+
+waitExpr : Parser Expr
+waitExpr =
+    P.succeed Wait
+        |. L.keyword "wait"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
+signalExpr : Parser Expr
+signalExpr =
+    P.succeed Signal
+        |. L.keyword "signal"
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
 constExpr : Parser Expr
 constExpr =
     P.map Const number
@@ -270,12 +299,15 @@ id =
                 , "let"
                 , "letrec"
                 , "list"
+                , "mutex"
                 , "null?"
                 , "proc"
                 , "print"
                 , "set"
+                , "signal"
                 , "spawn"
                 , "then"
+                , "wait"
                 , "zero?"
                 ]
         }

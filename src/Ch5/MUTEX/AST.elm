@@ -31,6 +31,9 @@ type Expr
     | Begin Expr (List Expr)
     | Print Expr
     | Spawn Expr
+    | Mutex
+    | Wait Expr
+    | Signal Expr
 
 
 type alias Procrec =
