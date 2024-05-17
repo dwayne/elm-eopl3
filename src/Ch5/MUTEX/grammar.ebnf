@@ -1,0 +1,45 @@
+Program ::= Expr
+
+Expr    ::= Const
+          | Var
+          | Diff
+          | Zero
+          | Cons | Car | Cdr | Null | EmptyList | List
+          | If
+          | Let
+          | Proc
+          | Letrec
+          | Call
+          | Set
+          | Begin
+          | Print
+          | Spawn
+
+Const   ::= Number
+Var     ::= Id
+Diff    ::= '-' '(' Expr ',' Expr ')'
+Zero    ::= 'zero?' '(' Expr ')'
+
+Cons      ::= 'cons' '(' Expr ',' Expr ')'
+Car       ::= 'car' '(' Expr ')'
+Cdr       ::= 'cdr' '(' Expr ')'
+Null      ::= 'null?' '(' Expr ')'
+EmptyList ::= 'emptylist'
+List      ::= 'list' '(' (Expr (',' Expr)*)? ')'
+
+If      ::= 'if' Expr 'then' Expr 'else' Expr
+Let     ::= 'let' Id '=' Expr 'in' Expr
+Proc    ::= 'proc' '(' Id ')' Expr
+Letrec  ::= 'letrec' { Id '(' Id ')' '=' Expr }* 'in' Expr
+Call    ::= '(' Expr Expr ')'
+
+Set     ::= 'set' Id '=' Expr
+Begin   ::= 'begin' Expr { ';' Expr  }* 'end'
+Print   ::= 'print' '(' Expr ')'
+
+Spawn   ::= 'spawn' '(' Expr ')'
+
+Number  ::= [0-9]+
+Id      ::= [a-z]+
+
+/* Use https://rr.red-dove.com/ui to view it as a Railroad Diagram. */
