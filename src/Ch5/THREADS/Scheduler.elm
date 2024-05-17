@@ -66,12 +66,8 @@ tick (Scheduler state) =
 
 runNextThread : Scheduler a -> Maybe ( a, Scheduler a )
 runNextThread ((Scheduler state) as scheduler) =
-    let
-        ( maybeThread, readyQueue ) =
-            Queue.dequeue state.readyQueue
-    in
-    case maybeThread of
-        Just thread ->
+    case Queue.dequeue state.readyQueue of
+        Just ( thread, readyQueue ) ->
             Just
                 ( Thread.run thread
                 , Scheduler

@@ -20,14 +20,14 @@ enqueue x (Queue front back) =
     Queue front (x :: back)
 
 
-dequeue : Queue a -> ( Maybe a, Queue a )
+dequeue : Queue a -> Maybe ( a, Queue a )
 dequeue ((Queue front back) as q) =
     case ( front, back ) of
         ( [], [] ) ->
-            ( Nothing, q )
+            Nothing
 
         ( x :: restFront, _ ) ->
-            ( Just x, Queue restFront back )
+            Just ( x, Queue restFront back )
 
         _ ->
             dequeue (Queue (List.reverse back) [])

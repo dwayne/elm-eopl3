@@ -19,7 +19,7 @@ import Ch5.THREADS.Thread as Thread exposing (Thread)
 -- TODO:
 --
 -- [x] Start with THREADS
--- [ ] Implement a mutex data structure
+-- [x] Implement a mutex data structure
 -- [ ] Add syntax for mutex, wait, and signal
 -- [ ] Implement MUTEX
 --
