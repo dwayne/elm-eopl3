@@ -1,4 +1,4 @@
-module Ch5.MUTEX.Examples exposing (example1, example2, example3)
+module Ch5.MUTEX.Examples exposing (example1, example2, example3, example4, example5)
 
 import Ch5.MUTEX.Interpreter as I exposing (Error, State(..), Value)
 import Ch5.THREADS.Output as Output exposing (Output)
@@ -150,3 +150,64 @@ example3 maxTimeSlice =
 -- large enough value of maxTimeSlice, 4 in this case, the final
 -- value of x is 3.
 --
+
+
+example4 : ( Result Error Value, State )
+example4 =
+    --
+    -- Example 4: Contains the changes that makes x = 2 in example3.
+    --
+    """
+    let
+        x = 0
+    in
+    let
+        incrx =
+            proc (id)
+                proc (dummy)
+                    set x = -(x, -(0, -(2, 1)))
+    in
+    begin
+        spawn((incrx 100));
+        spawn((incrx 200));
+        spawn((incrx 300))
+    end
+    """
+        |> I.run 1
+
+
+example5 : ( Result Error Value, State )
+example5 =
+    --
+    -- Example 5: A safe counter using a mutex.
+    --
+    -- It fixes the problem we encountered in example4.
+    --
+    -- Q: How do we know for sure it fixes it?
+    --
+    -- A: Answer we can keep the source as it is and
+    --    implement both wait and signal as a no-op.
+    --
+    --    When we do that we get x = 2 and not x = 3.
+    --
+    """
+    let x = 0
+    in let mut = mutex()
+    in
+    let
+        incrx =
+            proc (id)
+                proc (dummy)
+                    begin
+                        wait(mut);
+                        set x = -(x, -(0, -(2, 1)));
+                        signal(mut)
+                    end
+    in
+    begin
+        spawn((incrx 100));
+        spawn((incrx 200));
+        spawn((incrx 300))
+    end
+    """
+        |> I.run 1
