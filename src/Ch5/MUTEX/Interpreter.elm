@@ -24,7 +24,7 @@ import Ch5.THREADS.Thread as Thread exposing (Thread)
 -- [x] Add syntax for mutex, wait, and signal
 -- [x] Implement Mutex
 -- [x] Implement Wait
--- [ ] Implement Signal
+-- [x] Implement Signal
 --
 
 
@@ -153,6 +153,7 @@ type Continuation
     | PrintCont Continuation
     | SpawnCont Continuation
     | WaitCont Continuation
+    | SignalCont Continuation
 
 
 evalProgram : AST.Program -> Env -> State -> ( Result RuntimeError Value, State )
@@ -243,8 +244,8 @@ evalExpr expr cont env state =
         Wait e ->
             evalExpr e (WaitCont cont) env state
 
-        Signal _ ->
-            Debug.todo "Implement Signal"
+        Signal e ->
+            evalExpr e (SignalCont cont) env state
 
 
 applyCont : Continuation -> Result RuntimeError Value -> State -> ( Result RuntimeError Value, State )
@@ -476,6 +477,19 @@ applyCont cont result startState =
                         case toMutex value state of
                             Ok ( ref, m ) ->
                                 wait ref m nextCont state
+
+                            Err err ->
+                                applyCont nextCont (Err err) state
+
+                    Err _ ->
+                        applyCont nextCont result state
+
+            SignalCont nextCont ->
+                case result of
+                    Ok value ->
+                        case toMutex value state of
+                            Ok ( ref, m ) ->
+                                signal ref m nextCont state
 
                             Err err ->
                                 applyCont nextCont (Err err) state
@@ -738,6 +752,31 @@ wait ref m cont state =
             in
             setref (VMutex <| Mutex.enqueue thread m) ref state
                 |> runNextThread
+
+
+signal : Ref -> Mutex -> Continuation -> State -> ( Result RuntimeError Value, State )
+signal ref m cont state =
+    let
+        computation =
+            \_ -> applyCont cont (Ok VUnit)
+    in
+    case Mutex.getStatus m of
+        Mutex.Open ->
+            state
+                |> computation ()
+
+        Mutex.Closed ->
+            case Mutex.dequeue m of
+                Just ( thread, newM ) ->
+                    state
+                        |> setref (VMutex newM) ref
+                        |> schedule thread
+                        |> computation ()
+
+                Nothing ->
+                    state
+                        |> setref (VMutex <| Mutex.open m) ref
+                        |> computation ()
 
 
 
