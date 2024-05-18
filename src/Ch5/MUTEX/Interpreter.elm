@@ -11,8 +11,8 @@ import Ch5.MUTEX.AST as AST exposing (..)
 import Ch5.MUTEX.Mutex as Mutex
 import Ch5.MUTEX.Parser as P
 import Ch5.THREADS.Output as Output exposing (Output)
-import Ch5.THREADS.Scheduler as Scheduler exposing (Scheduler)
-import Ch5.THREADS.Thread as Thread exposing (Thread)
+import Ch5.THREADS.Scheduler as Scheduler
+import Ch5.THREADS.Thread as Thread
 
 
 
@@ -49,13 +49,21 @@ type alias Store =
 type State
     = State
         { store : Store
-        , scheduler : Scheduler (State -> ( Result RuntimeError Value, State ))
+        , scheduler : Scheduler
         , output : Output
         }
 
 
 type Procedure
     = Closure Id Expr Env
+
+
+type alias Thread =
+    Thread.Thread (State -> ( Result RuntimeError Value, State ))
+
+
+type alias Scheduler =
+    Scheduler.Scheduler (State -> ( Result RuntimeError Value, State ))
 
 
 type alias Mutex =
@@ -723,15 +731,15 @@ toString v =
 newMutex : Continuation -> State -> ( Result RuntimeError Value, State )
 newMutex cont state =
     let
-        ( resultRef, state1 ) =
+        ( resultRef, newState ) =
             newref (VMutex Mutex.new) state
     in
     case resultRef of
         Ok ref ->
-            applyCont cont (Ok <| VRef ref) state1
+            applyCont cont (Ok <| VRef ref) newState
 
         Err err ->
-            applyCont cont (Err err) state1
+            applyCont cont (Err err) newState
 
 
 wait : Ref -> Mutex -> Continuation -> State -> ( Result RuntimeError Value, State )
@@ -742,7 +750,8 @@ wait ref m cont state =
     in
     case Mutex.getStatus m of
         Mutex.Open ->
-            setref (VMutex <| Mutex.close m) ref state
+            state
+                |> setref (VMutex <| Mutex.close m) ref
                 |> computation ()
 
         Mutex.Closed ->
@@ -750,7 +759,8 @@ wait ref m cont state =
                 thread =
                     Thread.new computation
             in
-            setref (VMutex <| Mutex.enqueue thread m) ref state
+            state
+                |> setref (VMutex <| Mutex.enqueue thread m) ref
                 |> runNextThread
 
 
@@ -783,7 +793,7 @@ signal ref m cont state =
 -- SCHEDULER
 
 
-schedule : Thread (State -> ( Result RuntimeError Value, State )) -> State -> State
+schedule : Thread -> State -> State
 schedule thread (State state) =
     State
         { state
@@ -816,11 +826,7 @@ runNextThread : State -> ( Result RuntimeError Value, State )
 runNextThread (State state) =
     case Scheduler.runNextThread state.scheduler of
         Just ( f, scheduler ) ->
-            let
-                state1 =
-                    State { state | scheduler = scheduler }
-            in
-            f state1
+            f <| State { state | scheduler = scheduler }
 
         Nothing ->
             ( Err <| UnexpectedError "finalAnswer is missing"
