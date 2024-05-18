@@ -1,4 +1,4 @@
-module Ch5.THREADS.Queue exposing
+module Lib.Queue exposing
     ( Queue
     , dequeue
     , empty

@@ -8,8 +8,8 @@ module Ch5.THREADS.Scheduler exposing
     , tick
     )
 
-import Ch5.THREADS.Queue as Queue exposing (Queue)
 import Ch5.THREADS.Thread as Thread exposing (Thread)
+import Lib.Queue as Queue exposing (Queue)
 
 
 type Scheduler a
