@@ -23,7 +23,7 @@ import Ch5.THREADS.Thread as Thread exposing (Thread)
 -- [x] Implement a mutex data structure
 -- [x] Add syntax for mutex, wait, and signal
 -- [x] Implement Mutex
--- [ ] Implement Wait
+-- [x] Implement Wait
 -- [ ] Implement Signal
 --
 
@@ -152,6 +152,7 @@ type Continuation
     | SequenceCont (List Expr) Env Continuation
     | PrintCont Continuation
     | SpawnCont Continuation
+    | WaitCont Continuation
 
 
 evalProgram : AST.Program -> Env -> State -> ( Result RuntimeError Value, State )
@@ -170,17 +171,15 @@ evalExpr expr cont env state =
                 ( result1, state1 ) =
                     find name env state
 
-                ( result2, state2 ) =
+                result2 =
                     case result1 of
                         Ok ref ->
                             deref ref state1
 
                         Err err ->
-                            ( Err err
-                            , state1
-                            )
+                            Err err
             in
-            applyCont cont result2 state2
+            applyCont cont result2 state1
 
         Diff a b ->
             evalExpr a (Diff1Cont b env cont) env state
@@ -241,8 +240,8 @@ evalExpr expr cont env state =
         Mutex ->
             newMutex cont state
 
-        Wait _ ->
-            Debug.todo "Implement Wait"
+        Wait e ->
+            evalExpr e (WaitCont cont) env state
 
         Signal _ ->
             Debug.todo "Implement Signal"
@@ -423,11 +422,8 @@ applyCont cont result startState =
                         in
                         case findResult of
                             Ok ref ->
-                                let
-                                    ( setrefResult, state2 ) =
-                                        setref ve ref state1
-                                in
-                                applyCont nextCont setrefResult state2
+                                setref ve ref state1
+                                    |> applyCont nextCont (Ok VUnit)
 
                             Err err ->
                                 applyCont nextCont (Err err) state1
@@ -467,6 +463,19 @@ applyCont cont result startState =
                                             )
                                 in
                                 applyCont nextCont (Ok VUnit) state1
+
+                            Err err ->
+                                applyCont nextCont (Err err) state
+
+                    Err _ ->
+                        applyCont nextCont result state
+
+            WaitCont nextCont ->
+                case result of
+                    Ok value ->
+                        case toMutex value state of
+                            Ok ( ref, m ) ->
+                                wait ref m nextCont state
 
                             Err err ->
                                 applyCont nextCont (Err err) state
@@ -607,6 +616,32 @@ toList v =
                     }
 
 
+toMutex : Value -> State -> Result RuntimeError ( Ref, Mutex )
+toMutex v state =
+    case v of
+        VRef ref ->
+            case deref ref state of
+                Ok (VMutex m) ->
+                    Ok ( ref, m )
+
+                Ok actualValue ->
+                    Err <|
+                        TypeError
+                            { expected = [ TMutex ]
+                            , actual = [ typeOf actualValue ]
+                            }
+
+                Err err ->
+                    Err err
+
+        _ ->
+            Err <|
+                TypeError
+                    { expected = [ TRef ]
+                    , actual = [ typeOf v ]
+                    }
+
+
 typeOf : Value -> Type
 typeOf v =
     case v of
@@ -683,6 +718,27 @@ newMutex cont state =
 
         Err err ->
             applyCont cont (Err err) state1
+
+
+wait : Ref -> Mutex -> Continuation -> State -> ( Result RuntimeError Value, State )
+wait ref m cont state =
+    let
+        computation =
+            \_ -> applyCont cont (Ok VUnit)
+    in
+    case Mutex.getStatus m of
+        Mutex.Open ->
+            setref (VMutex <| Mutex.close m) ref state
+                |> computation ()
+
+        Mutex.Closed ->
+            let
+                thread =
+                    Thread.new computation
+            in
+            setref (VMutex <| Mutex.enqueue thread m) ref state
+                |> runNextThread
+
 
 
 -- SCHEDULER
@@ -800,22 +856,16 @@ newref v (State state) =
     )
 
 
-deref : Ref -> State -> ( Result RuntimeError Value, State )
-deref ref ((State { store }) as state) =
+deref : Ref -> State -> Result RuntimeError Value
+deref ref (State { store }) =
     case Store.deref ref store of
         Just v ->
-            ( Ok v
-            , state
-            )
+            Ok v
 
         Nothing ->
-            ( Err <| UnexpectedError <| "reference not found: " ++ Store.refToString ref
-            , state
-            )
+            Err <| UnexpectedError <| "reference not found: " ++ Store.refToString ref
 
 
-setref : Value -> Ref -> State -> ( Result RuntimeError Value, State )
+setref : Value -> Ref -> State -> State
 setref v ref (State state) =
-    ( Ok VUnit
-    , State { state | store = Store.setref ref v state.store }
-    )
+    State { state | store = Store.setref ref v state.store }
