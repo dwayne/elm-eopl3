@@ -4,27 +4,32 @@
 # Usage: check
 #
 
-set -euo pipefail
+set -uo pipefail
+
+project="${PROJECT_ROOT:?}"
+
+run () {
+  command=$*
+  output=$($command 2>&1)
+  error=$?
+  if (( error )); then
+    fail "$output" "$error"
+  fi
+}
 
 fail () {
   echo "$1" >&2
-  exit 1
+  exit "$2"
 }
 
-# Check scripts
+check-scripts () {
+  shellcheck --norc --shell bash "$project/bin/"*
+  #
+  # --no-rc = Don't look for .shellcheckrc files
+  # --shell = Specify dialect (sh, bash, dash, ksh, busybox)
+  #
+}
 
-if ! check-scripts &>/dev/null; then
-  check-scripts
-fi
-
-# Format
-
-if ! format --validate &>/dev/null; then
-  fail "Your code needs to be formatted. Run: format"
-fi
-
-# Test
-
-if ! elm-test &>/dev/null; then
-  elm-test
-fi
+run check-scripts
+run format --validate
+run elm-test

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 
 #
-# Usage: format [args-for-elm-format]
+# Usage: format [args=[--yes]]
 #
 
 set -euo pipefail
 
-cd "${project:?}" && \
+cd "${PROJECT_ROOT:?}" && \
   elm-format         \
     src              \
     tests            \
