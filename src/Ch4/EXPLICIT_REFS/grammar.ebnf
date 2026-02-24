@@ -33,4 +33,4 @@ Begin   ::= 'begin' Expr { ';' Expr  }* 'end'
 Number  ::= [0-9]+
 Id      ::= [a-z]+
 
-/* Use https://rr.red-dove.com/ui to view it as a Railroad Diagram. */
+/* Use https://www.bottlecaps.de/rr/ui to view it as a Railroad Diagram. */
