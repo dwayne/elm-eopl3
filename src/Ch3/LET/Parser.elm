@@ -10,7 +10,7 @@ type alias Error =
     List P.DeadEnd
 
 
-parse : String -> Result (List P.DeadEnd) AST.Program
+parse : String -> Result Error AST.Program
 parse =
     P.run program
 
