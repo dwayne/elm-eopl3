@@ -36,13 +36,15 @@
               rm -rf "$PROJECT_ROOT/elm-stuff"
             }
 
-            echo "Development environment loaded"
-            echo ""
-            echo "Type 'f' to run elm-format"
-            echo "Type 't' to run elm-test"
-            echo "Type 'c' to run all checks"
-            echo "Type 'clean' to remove build artifacts"
-            echo ""
+            if [[ $- == *i* ]]; then
+              echo "Development environment loaded"
+              echo ""
+              echo "Type 'f' to run elm-format"
+              echo "Type 't' to run elm-test"
+              echo "Type 'c' to run all checks"
+              echo "Type 'clean' to remove build artifacts"
+              echo ""
+            fi
           '';
         };
       }
