@@ -3,7 +3,7 @@ module Ch4.EXPLICIT_REFS.Interpreter exposing (Value(..), run)
 import Ch4.EXPLICIT_REFS.AST as AST exposing (..)
 import Ch4.EXPLICIT_REFS.Env as Env
 import Ch4.EXPLICIT_REFS.Parser as P
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
+import Lib.Store as Store exposing (Ref)
 
 
 type Value

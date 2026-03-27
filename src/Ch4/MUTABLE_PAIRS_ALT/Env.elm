@@ -8,7 +8,7 @@ module Ch4.MUTABLE_PAIRS_ALT.Env exposing
     , find
     )
 
-import Ch4.MUTABLE_PAIRS_ALT.Store as Store exposing (Ref, Store)
+import Lib.Store as Store exposing (Ref, Store)
 
 
 type

@@ -8,7 +8,7 @@ module Ch4.MUTABLE_PAIRS_ALT.MutPair exposing
     , toString
     )
 
-import Ch4.MUTABLE_PAIRS_ALT.Store as Store exposing (Ref, Store)
+import Lib.Store as Store exposing (Ref, Store)
 
 
 type

@@ -1,9 +1,9 @@
 module Ch4.CALL_BY_NAME.Interpreter exposing (Value(..), run)
 
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch4.IMPLICIT_REFS.AST as AST exposing (..)
 import Ch4.IMPLICIT_REFS.Env as Env
 import Ch4.IMPLICIT_REFS.Parser as P
+import Lib.Store as Store exposing (Ref)
 
 
 type

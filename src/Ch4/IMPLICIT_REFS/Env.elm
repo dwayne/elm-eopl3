@@ -8,7 +8,7 @@ module Ch4.IMPLICIT_REFS.Env exposing
     , find
     )
 
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref, Store)
+import Lib.Store as Store exposing (Ref, Store)
 
 
 type

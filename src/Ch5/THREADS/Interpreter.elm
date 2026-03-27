@@ -5,13 +5,13 @@ module Ch5.THREADS.Interpreter exposing
     , run
     )
 
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch4.IMPLICIT_REFS.Env as Env
 import Ch5.THREADS.AST as AST exposing (..)
 import Ch5.THREADS.Output as Output exposing (Output)
 import Ch5.THREADS.Parser as P
 import Ch5.THREADS.Scheduler as Scheduler exposing (Scheduler)
 import Ch5.THREADS.Thread as Thread exposing (Thread)
+import Lib.Store as Store exposing (Ref)
 
 
 

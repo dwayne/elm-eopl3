@@ -1,10 +1,10 @@
 module Ch4.MUTABLE_PAIRS.Interpreter exposing (Value(..), run)
 
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch4.IMPLICIT_REFS.Env as Env
 import Ch4.MUTABLE_PAIRS.AST as AST exposing (..)
 import Ch4.MUTABLE_PAIRS.MutPair as MutPair exposing (MutPair)
 import Ch4.MUTABLE_PAIRS.Parser as P
+import Lib.Store as Store exposing (Ref)
 
 
 type Value

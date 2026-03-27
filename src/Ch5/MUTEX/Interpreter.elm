@@ -5,7 +5,6 @@ module Ch5.MUTEX.Interpreter exposing
     , run
     )
 
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref)
 import Ch4.IMPLICIT_REFS.Env as Env
 import Ch5.MUTEX.AST as AST exposing (..)
 import Ch5.MUTEX.Mutex as Mutex
@@ -13,6 +12,7 @@ import Ch5.MUTEX.Parser as P
 import Ch5.THREADS.Output as Output exposing (Output)
 import Ch5.THREADS.Scheduler as Scheduler
 import Ch5.THREADS.Thread as Thread
+import Lib.Store as Store exposing (Ref)
 
 
 

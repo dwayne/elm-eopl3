@@ -4,7 +4,7 @@ import Ch4.MUTABLE_PAIRS.AST as AST exposing (..)
 import Ch4.MUTABLE_PAIRS.Parser as P
 import Ch4.MUTABLE_PAIRS_ALT.Env as Env
 import Ch4.MUTABLE_PAIRS_ALT.MutPair as MutPair exposing (MutPair)
-import Ch4.MUTABLE_PAIRS_ALT.Store as Store exposing (Ref)
+import Lib.Store as Store exposing (Ref)
 
 
 type Value

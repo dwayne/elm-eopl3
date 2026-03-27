@@ -1,4 +1,4 @@
-module Ch4.MUTABLE_PAIRS_ALT.Store exposing
+module Lib.Store exposing
     ( Ref
     , Store
     , deref
@@ -62,4 +62,7 @@ refToString (Ref r) =
 
 refNext : Ref -> Ref
 refNext (Ref r) =
+    --
+    -- N.B. This function is primarily used by MUTABLE_PAIRS_ALT so it may not be useful in general.
+    --
     Ref (r + 1)

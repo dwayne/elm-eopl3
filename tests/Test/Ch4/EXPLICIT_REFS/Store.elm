@@ -1,7 +1,7 @@
 module Test.Ch4.EXPLICIT_REFS.Store exposing (suite)
 
-import Ch4.EXPLICIT_REFS.Store as Store exposing (Ref, Store)
 import Expect
+import Lib.Store as Store exposing (Ref, Store)
 import Test exposing (Test, describe, test)
 
 
