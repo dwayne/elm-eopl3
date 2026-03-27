@@ -2,6 +2,7 @@ module Ch5.CONTINUATION_PASSING.Parser exposing (Error, parse)
 
 import Ch5.CONTINUATION_PASSING.AST as AST exposing (..)
 import Lib.Lexer as L
+import Lib.Parser as P
 import Parser as P exposing ((|.), (|=), Parser)
 import Set
 
@@ -130,18 +131,13 @@ varExpr =
 
 id : Parser String
 id =
-    L.makeIdentifier
-        { start = Char.isLower
-        , inner = Char.isLower
-        , reserved =
-            Set.fromList
-                [ "else"
-                , "if"
-                , "in"
-                , "let"
-                , "letrec"
-                , "proc"
-                , "then"
-                , "zero?"
-                ]
-        }
+    P.id
+        [ "else"
+        , "if"
+        , "in"
+        , "let"
+        , "letrec"
+        , "proc"
+        , "then"
+        , "zero?"
+        ]

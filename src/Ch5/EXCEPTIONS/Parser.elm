@@ -2,6 +2,7 @@ module Ch5.EXCEPTIONS.Parser exposing (Error, parse)
 
 import Ch5.EXCEPTIONS.AST as AST exposing (..)
 import Lib.Lexer as L
+import Lib.Parser as P
 import Parser as P exposing ((|.), (|=), Parser)
 import Set
 
@@ -151,21 +152,16 @@ varExpr =
 
 id : Parser String
 id =
-    L.makeIdentifier
-        { start = Char.isLower
-        , inner = Char.isLower
-        , reserved =
-            Set.fromList
-                [ "else"
-                , "if"
-                , "in"
-                , "let"
-                , "letrec"
-                , "proc"
-                , "then"
-                , "zero?"
-                , "try"
-                , "catch"
-                , "raise"
-                ]
-        }
+    P.id
+        [ "else"
+        , "if"
+        , "in"
+        , "let"
+        , "letrec"
+        , "proc"
+        , "then"
+        , "zero?"
+        , "try"
+        , "catch"
+        , "raise"
+        ]

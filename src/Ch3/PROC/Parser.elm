@@ -2,6 +2,7 @@ module Ch3.PROC.Parser exposing (Error, parse)
 
 import Ch3.PROC.AST as AST exposing (..)
 import Lib.Lexer as L
+import Lib.Parser as P
 import Parser as P exposing ((|.), (|=), Parser)
 import Set
 
@@ -115,17 +116,12 @@ varExpr =
 
 id : Parser String
 id =
-    L.makeIdentifier
-        { start = Char.isLower
-        , inner = Char.isLower
-        , reserved =
-            Set.fromList
-                [ "else"
-                , "if"
-                , "in"
-                , "let"
-                , "proc"
-                , "then"
-                , "zero?"
-                ]
-        }
+    P.id
+        [ "else"
+        , "if"
+        , "in"
+        , "let"
+        , "proc"
+        , "then"
+        , "zero?"
+        ]

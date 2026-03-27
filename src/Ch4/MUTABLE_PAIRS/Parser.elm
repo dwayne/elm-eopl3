@@ -2,6 +2,7 @@ module Ch4.MUTABLE_PAIRS.Parser exposing (Error, parse)
 
 import Ch4.MUTABLE_PAIRS.AST as AST exposing (..)
 import Lib.Lexer as L
+import Lib.Parser as P
 import Parser as P exposing ((|.), (|=), Parser)
 import Set
 
@@ -101,7 +102,7 @@ letrecExpr : Parser Expr
 letrecExpr =
     P.succeed Letrec
         |. L.keyword "letrec"
-        |= many procrec
+        |= P.many procrec
         |. L.keyword "in"
         |= P.lazy (\_ -> expr)
 
@@ -140,7 +141,7 @@ beginExpr =
     P.succeed Begin
         |. L.keyword "begin"
         |= P.lazy (\_ -> expr)
-        |= many
+        |= P.many
             (P.succeed identity
                 |. L.symbol ";"
                 |= P.lazy (\_ -> expr)
@@ -216,40 +217,21 @@ varExpr =
 
 id : Parser String
 id =
-    L.makeIdentifier
-        { start = Char.isLower
-        , inner = Char.isLower
-        , reserved =
-            Set.fromList <|
-                [ "zero?"
-                , "if"
-                , "then"
-                , "else"
-                , "let"
-                , "in"
-                , "proc"
-                , "letrec"
-                , "set"
-                , "begin"
-                , "end"
-                , "pair"
-                , "left"
-                , "right"
-                , "setleft"
-                , "setright"
-                ]
-        }
-
-
-
--- HELPERS
-
-
-many : Parser a -> Parser (List a)
-many p =
-    P.loop [] <|
-        \rev ->
-            P.oneOf
-                [ P.map (\x -> P.Loop (x :: rev)) p
-                , P.succeed (P.Done (List.reverse rev))
-                ]
+    P.id
+        [ "zero?"
+        , "if"
+        , "then"
+        , "else"
+        , "let"
+        , "in"
+        , "proc"
+        , "letrec"
+        , "set"
+        , "begin"
+        , "end"
+        , "pair"
+        , "left"
+        , "right"
+        , "setleft"
+        , "setright"
+        ]

@@ -2,6 +2,7 @@ module Ch5.THREADS.Parser exposing (Error, parse)
 
 import Ch5.THREADS.AST as AST exposing (..)
 import Lib.Lexer as L
+import Lib.Parser as P
 import Parser as P exposing ((|.), (|=), Parser)
 import Set
 
@@ -124,10 +125,10 @@ listExpr =
 commaSepExprs : Parser (List Expr)
 commaSepExprs =
     P.map (Maybe.withDefault []) <|
-        optional
+        P.optional
             (P.succeed (::)
                 |= P.lazy (\_ -> expr)
-                |= many
+                |= P.many
                     (P.succeed identity
                         |. L.symbol ","
                         |= P.lazy (\_ -> expr)
@@ -171,7 +172,7 @@ letrecExpr : Parser Expr
 letrecExpr =
     P.succeed Letrec
         |. L.keyword "letrec"
-        |= many procrec
+        |= P.many procrec
         |. L.keyword "in"
         |= P.lazy (\_ -> expr)
 
@@ -210,7 +211,7 @@ beginExpr =
     P.succeed Begin
         |. L.keyword "begin"
         |= P.lazy (\_ -> expr)
-        |= many
+        |= P.many
             (P.succeed identity
                 |. L.symbol ";"
                 |= P.lazy (\_ -> expr)
@@ -253,51 +254,24 @@ varExpr =
 
 id : Parser String
 id =
-    L.makeIdentifier
-        { start = Char.isLower
-        , inner = Char.isLower
-        , reserved =
-            Set.fromList
-                [ "begin"
-                , "car"
-                , "cdr"
-                , "cons"
-                , "else"
-                , "emptylist"
-                , "end"
-                , "if"
-                , "in"
-                , "let"
-                , "letrec"
-                , "list"
-                , "null?"
-                , "proc"
-                , "print"
-                , "set"
-                , "spawn"
-                , "then"
-                , "zero?"
-                ]
-        }
-
-
-
--- HELPERS
-
-
-optional : Parser a -> Parser (Maybe a)
-optional p =
-    P.oneOf
-        [ P.map Just p
-        , P.succeed Nothing
+    P.id
+        [ "begin"
+        , "car"
+        , "cdr"
+        , "cons"
+        , "else"
+        , "emptylist"
+        , "end"
+        , "if"
+        , "in"
+        , "let"
+        , "letrec"
+        , "list"
+        , "null?"
+        , "proc"
+        , "print"
+        , "set"
+        , "spawn"
+        , "then"
+        , "zero?"
         ]
-
-
-many : Parser a -> Parser (List a)
-many p =
-    P.loop [] <|
-        \rev ->
-            P.oneOf
-                [ P.map (\x -> P.Loop (x :: rev)) p
-                , P.succeed (P.Done (List.reverse rev))
-                ]

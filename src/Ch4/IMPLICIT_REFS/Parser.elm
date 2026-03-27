@@ -2,6 +2,7 @@ module Ch4.IMPLICIT_REFS.Parser exposing (Error, parse)
 
 import Ch4.IMPLICIT_REFS.AST as AST exposing (..)
 import Lib.Lexer as L
+import Lib.Parser as P
 import Parser as P exposing ((|.), (|=), Parser)
 import Set
 
@@ -96,7 +97,7 @@ letrecExpr : Parser Expr
 letrecExpr =
     P.succeed Letrec
         |. L.keyword "letrec"
-        |= many procrec
+        |= P.many procrec
         |. L.keyword "in"
         |= P.lazy (\_ -> expr)
 
@@ -135,7 +136,7 @@ beginExpr =
     P.succeed Begin
         |. L.keyword "begin"
         |= P.lazy (\_ -> expr)
-        |= many
+        |= P.many
             (P.succeed identity
                 |. L.symbol ";"
                 |= P.lazy (\_ -> expr)
@@ -160,35 +161,16 @@ varExpr =
 
 id : Parser String
 id =
-    L.makeIdentifier
-        { start = Char.isLower
-        , inner = Char.isLower
-        , reserved =
-            Set.fromList
-                [ "begin"
-                , "else"
-                , "end"
-                , "if"
-                , "in"
-                , "let"
-                , "letrec"
-                , "proc"
-                , "set"
-                , "then"
-                , "zero?"
-                ]
-        }
-
-
-
--- HELPERS
-
-
-many : Parser a -> Parser (List a)
-many p =
-    P.loop [] <|
-        \rev ->
-            P.oneOf
-                [ P.map (\x -> P.Loop (x :: rev)) p
-                , P.succeed (P.Done (List.reverse rev))
-                ]
+    P.id
+        [ "begin"
+        , "else"
+        , "end"
+        , "if"
+        , "in"
+        , "let"
+        , "letrec"
+        , "proc"
+        , "set"
+        , "then"
+        , "zero?"
+        ]
