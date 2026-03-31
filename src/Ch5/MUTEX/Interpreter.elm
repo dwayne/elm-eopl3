@@ -17,7 +17,7 @@ import Lib.Store as Store exposing (Ref)
 
 
 --
--- TODO:
+-- STEPS:
 --
 -- [x] Start with THREADS
 -- [x] Implement a mutex data structure

@@ -16,7 +16,7 @@ import Lib.Store as Store exposing (Ref)
 
 
 --
--- TODO:
+-- STEPS:
 --
 -- [x] Start with IMPLICIT-REFS
 -- [x] Remove Eval and implement the store-passing interpreter explicitly
