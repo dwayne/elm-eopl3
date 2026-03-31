@@ -3,6 +3,7 @@ module Ch4.IMPLICIT_REFS.Interpreter exposing (Value(..), run)
 import Ch4.IMPLICIT_REFS.AST as AST exposing (..)
 import Ch4.IMPLICIT_REFS.Env as Env
 import Ch4.IMPLICIT_REFS.Parser as P
+import Lib.Eval as Eval
 import Lib.Store as Store exposing (Ref)
 
 
@@ -47,6 +48,10 @@ type RuntimeError
     | UnexpectedError String
 
 
+type alias Eval a =
+    Eval.Eval Store RuntimeError a
+
+
 run : String -> Result Error Value
 run input =
     case P.parse input of
@@ -65,7 +70,7 @@ evalProgram (Program expr) =
             initState
     in
     evalExpr expr initEnv
-        |> runEval initStore
+        |> Eval.runEval initStore
 
 
 initState : ( Env, Store )
@@ -95,18 +100,18 @@ evalExpr : Expr -> Env -> Eval Value
 evalExpr expr env =
     case expr of
         Const n ->
-            succeed <| VNumber n
+            Eval.succeed <| VNumber n
 
         Var name ->
             find name env
-                |> andThen deref
+                |> Eval.andThen deref
 
         Diff a b ->
             evalExpr a env
-                |> andThen
+                |> Eval.andThen
                     (\va ->
                         evalExpr b env
-                            |> andThen
+                            |> Eval.andThen
                                 (\vb ->
                                     evalDiff va vb
                                 )
@@ -114,47 +119,47 @@ evalExpr expr env =
 
         Zero a ->
             evalExpr a env
-                |> andThen evalZero
+                |> Eval.andThen evalZero
 
         If test consequent alternative ->
             evalExpr test env
-                |> andThen
+                |> Eval.andThen
                     (\vTest ->
                         evalIf vTest consequent alternative env
                     )
 
         Let name e body ->
             evalExpr e env
-                |> andThen newref
-                |> andThen
+                |> Eval.andThen newref
+                |> Eval.andThen
                     (\ref ->
                         evalExpr body (Env.extend name ref env)
                     )
 
         Proc param body ->
-            succeed <| VProcedure <| Closure param body env
+            Eval.succeed <| VProcedure <| Closure param body env
 
         Letrec procrecs letrecBody ->
             evalExpr letrecBody (Env.extendRec procrecs env)
 
         Call rator rand ->
             evalExpr rator env
-                |> andThen
+                |> Eval.andThen
                     (\vRator ->
                         toProcedure vRator
-                            |> andThen
+                            |> Eval.andThen
                                 (\f ->
                                     evalExpr rand env
-                                        |> andThen (applyProcedure f)
+                                        |> Eval.andThen (applyProcedure f)
                                 )
                     )
 
         Set name e ->
             evalExpr e env
-                |> andThen
+                |> Eval.andThen
                     (\ve ->
                         find name env
-                            |> andThen (setref ve)
+                            |> Eval.andThen (setref ve)
                     )
 
         Begin firstExpr restExprs ->
@@ -165,10 +170,10 @@ evalDiff : Value -> Value -> Eval Value
 evalDiff va vb =
     case ( va, vb ) of
         ( VNumber a, VNumber b ) ->
-            succeed <| VNumber <| a - b
+            Eval.succeed <| VNumber <| a - b
 
         _ ->
-            fail <|
+            Eval.fail <|
                 TypeError
                     { expected = [ TNumber, TNumber ]
                     , actual = [ typeOf va, typeOf vb ]
@@ -179,10 +184,10 @@ evalZero : Value -> Eval Value
 evalZero va =
     case va of
         VNumber n ->
-            succeed <| VBool <| n == 0
+            Eval.succeed <| VBool <| n == 0
 
         _ ->
-            fail <|
+            Eval.fail <|
                 TypeError
                     { expected = [ TNumber ]
                     , actual = [ typeOf va ]
@@ -200,7 +205,7 @@ evalIf vTest consequent alternative env =
                 evalExpr alternative env
 
         _ ->
-            fail <|
+            Eval.fail <|
                 TypeError
                     { expected = [ TBool ]
                     , actual = [ typeOf vTest ]
@@ -210,7 +215,7 @@ evalIf vTest consequent alternative env =
 applyProcedure : Procedure -> Value -> Eval Value
 applyProcedure (Closure param body savedEnv) value =
     newref value
-        |> andThen
+        |> Eval.andThen
             (\ref ->
                 evalExpr body <| Env.extend param ref savedEnv
             )
@@ -224,24 +229,24 @@ evalExprs exprs env =
 
         expr :: restExprs ->
             evalExpr expr env
-                |> followedBy (evalExprs restExprs env)
+                |> Eval.followedBy (evalExprs restExprs env)
 
         [] ->
             --
             -- N.B. This should NEVER happen since the parser
             --      expects begin to have at least one expression.
             --
-            fail <| UnexpectedError "begin has no expressions"
+            Eval.fail <| UnexpectedError "begin has no expressions"
 
 
 toProcedure : Value -> Eval Procedure
 toProcedure v =
     case v of
         VProcedure f ->
-            succeed f
+            Eval.succeed f
 
         _ ->
-            fail <|
+            Eval.fail <|
                 TypeError
                     { expected = [ TProcedure ]
                     , actual = [ typeOf v ]
@@ -270,8 +275,8 @@ typeOf v =
 
 find : Id -> Env -> Eval Ref
 find name env =
-    getStore
-        |> andThen
+    Eval.getState
+        |> Eval.andThen
             (\store0 ->
                 let
                     findOptions =
@@ -282,14 +287,14 @@ find name env =
                 in
                 case Env.find findOptions env of
                     Just (Env.Ref ref) ->
-                        succeed ref
+                        Eval.succeed ref
 
                     Just (Env.Procedure ref store1) ->
-                        setStore store1
-                            |> followedBy (succeed ref)
+                        Eval.setState store1
+                            |> Eval.followedBy (Eval.succeed ref)
 
                     Nothing ->
-                        fail <| IdentifierNotFound name
+                        Eval.fail <| IdentifierNotFound name
             )
 
 
@@ -304,124 +309,39 @@ toClosure param body savedEnv =
 
 newref : Value -> Eval Ref
 newref v =
-    getStore
-        |> andThen
+    Eval.getState
+        |> Eval.andThen
             (\store0 ->
                 let
                     ( ref, store1 ) =
                         Store.newref v store0
                 in
-                setStore store1
-                    |> followedBy (succeed ref)
+                Eval.setState store1
+                    |> Eval.followedBy (Eval.succeed ref)
             )
 
 
 deref : Ref -> Eval Value
 deref ref =
-    getStore
-        |> andThen
+    Eval.getState
+        |> Eval.andThen
             (\store ->
                 case Store.deref ref store of
                     Just v ->
-                        succeed v
+                        Eval.succeed v
 
                     Nothing ->
-                        fail <| UnexpectedError <| "reference not found: " ++ Store.refToString ref
+                        Eval.fail <| UnexpectedError <| "reference not found: " ++ Store.refToString ref
             )
 
 
 setref : Value -> Ref -> Eval Value
 setref v ref =
-    getStore
-        |> andThen (setStore << Store.setref ref v)
-        |> followedBy unit
+    Eval.getState
+        |> Eval.andThen (Eval.setState << Store.setref ref v)
+        |> Eval.followedBy unit
 
 
 unit : Eval Value
 unit =
-    succeed VUnit
-
-
-
--- EVAL
-
-
-type alias Eval a =
-    Store -> ( Result RuntimeError a, Store )
-
-
-runEval : Store -> Eval a -> Result RuntimeError a
-runEval store eval =
-    Tuple.first <| eval store
-
-
-succeed : a -> Eval a
-succeed a =
-    \store0 ->
-        ( Ok a
-        , store0
-        )
-
-
-fail : RuntimeError -> Eval a
-fail err =
-    \store0 ->
-        ( Err err
-        , store0
-        )
-
-
-getStore : Eval Store
-getStore =
-    \store0 ->
-        ( Ok store0
-        , store0
-        )
-
-
-setStore : Store -> Eval ()
-setStore newStore =
-    \_ ->
-        ( Ok ()
-        , newStore
-        )
-
-
-map : (a -> b) -> Eval a -> Eval b
-map f evalA =
-    \store0 ->
-        let
-            ( resultA, store1 ) =
-                evalA store0
-        in
-        case resultA of
-            Ok a ->
-                ( Ok <| f a, store1 )
-
-            Err err ->
-                ( Err err, store1 )
-
-
-andThen : (a -> Eval b) -> Eval a -> Eval b
-andThen f evalA =
-    \store0 ->
-        let
-            ( resultA, store1 ) =
-                evalA store0
-        in
-        case resultA of
-            Ok a ->
-                let
-                    evalB =
-                        f a
-                in
-                evalB store1
-
-            Err err ->
-                ( Err err, store1 )
-
-
-followedBy : Eval b -> Eval a -> Eval b
-followedBy evalB evalA =
-    evalA
-        |> andThen (\_ -> evalB)
+    Eval.succeed VUnit
