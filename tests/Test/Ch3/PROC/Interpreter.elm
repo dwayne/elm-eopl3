@@ -1,14 +1,14 @@
 module Test.Ch3.PROC.Interpreter exposing (suite)
 
 import Ch3.PROC.Interpreter as I exposing (Value(..))
-import Expect exposing (Expectation)
-import Test exposing (Test, describe, test)
+import Test exposing (Test, describe)
+import Test.Helpers exposing (testOk)
 
 
 suite : Test
 suite =
     describe "Ch3.PROC.Interpreter" <|
-        List.map testValue
+        List.map (testOk I.run << Tuple.mapSecond Just)
             [ ( "5"
               , VNumber 5
               )
@@ -209,55 +209,37 @@ suite =
                 --
               , VNumber 12
               )
-
-            --
-            -- My derivation doesn't work in Elm. I get the following error:
-            --
-            --   This test failed because it threw an exception: "RangeError: Maximum call stack size exceeded"
-            --
-            -- However, it works in Haskell.
-            --
-            --, ( """
-            --    let makerec =
-            --      proc (f)
-            --        let inf =
-            --          proc (inf)
-            --            (f (inf inf))
-            --        in (inf inf)
-            --    in let maketimes =
-            --         proc (f)
-            --           proc (x)
-            --             if zero?(x) then
-            --               0
-            --             else
-            --               -((f -(x, 1)), -(0, 4))
-            --       in let times = (makerec maketimes)
-            --          in (times 3)
-            --    """
-            --    --
-            --    -- Example for exercise 3.25 - my derivation
-            --    --
-            --    -- Changes:
-            --    -- 1. maketimes4 = maketimes
-            --    -- 2. times4 = times
-            --    -- 3. -4 = -(0, 4)
-            --    --
-            --  , VNumber 12
-            --  )
+            , ( """
+                let
+                  makerec =
+                    proc (almostf)
+                    let
+                      makef =
+                        proc (self)
+                          (almostf
+                           proc (x) ((self self) x))
+                    in
+                    (makef makef)
+                in
+                let
+                  almosttimes =
+                    proc (times)
+                      proc (x)
+                        if zero?(x) then
+                          0
+                        else
+                          -((times -(x, 1)), -(0, 4))
+                in
+                let
+                  times = (makerec almosttimes)
+                in
+                (times 3)
+                """
+                --
+                -- Example for exercise 3.25 - my derivation
+                --
+                -- Read https://blog.tinyinterpreters.dev/posts/deriving-the-y-combinator/
+                --
+              , VNumber 12
+              )
             ]
-
-
-testValue : ( String, Value ) -> Test
-testValue ( input, expectedValue ) =
-    test input <|
-        \_ ->
-            case I.run input of
-                Ok actualValue ->
-                    if expectedValue == actualValue then
-                        Expect.pass
-
-                    else
-                        Expect.fail <| "expected = " ++ Debug.toString expectedValue ++ ", actual = " ++ Debug.toString actualValue
-
-                Err e ->
-                    Expect.fail <| Debug.toString e

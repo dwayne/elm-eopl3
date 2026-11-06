@@ -1,10 +1,17 @@
 Program ::= Expr
-Expr    ::= Const | Var | Diff | Zero | If | Let | Proc | Call
+Expr    ::= Const
+          | Diff
+          | Zero
+          | If
+          | Var
+          | Let
+          | Proc
+          | Call
 Const   ::= Number
-Var     ::= Id
 Diff    ::= '-' '(' Expr ',' Expr ')'
 Zero    ::= 'zero?' '(' Expr ')'
 If      ::= 'if' Expr 'then' Expr 'else' Expr
+Var     ::= Id
 Let     ::= 'let' Id '=' Expr 'in' Expr
 Proc    ::= 'proc' '(' Id ')' Expr
 Call    ::= '(' Expr Expr ')'
