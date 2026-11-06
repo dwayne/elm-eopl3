@@ -1,14 +1,14 @@
 module Test.Ch3.LET.Interpreter exposing (suite)
 
 import Ch3.LET.Interpreter as I exposing (Value(..))
-import Expect exposing (Expectation)
-import Test exposing (Test, describe, test)
+import Test exposing (Test, describe)
+import Test.Helpers exposing (testOk)
 
 
 suite : Test
 suite =
     describe "Ch3.LET.Interpreter" <|
-        List.map testValue
+        List.map (testOk I.run << Tuple.mapSecond Just)
             [ ( "5"
               , VNumber 5
               )
@@ -54,19 +54,3 @@ suite =
               , VNumber -5
               )
             ]
-
-
-testValue : ( String, Value ) -> Test
-testValue ( input, expectedValue ) =
-    test input <|
-        \_ ->
-            case I.run input of
-                Ok actualValue ->
-                    if expectedValue == actualValue then
-                        Expect.pass
-
-                    else
-                        Expect.fail <| "expected = " ++ Debug.toString expectedValue ++ ", actual = " ++ Debug.toString actualValue
-
-                Err e ->
-                    Expect.fail <| Debug.toString e
