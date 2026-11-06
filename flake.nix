@@ -1,52 +1,30 @@
 {
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem(system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in
-      {
-        devShells.default = pkgs.mkShell {
-          name = "elm-eopl3";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    flake-elm2nix = {
+      url = "github:dwayne/elm2nix/use-elm-0.19.3";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
 
-          packages = [
-            pkgs.elmPackages.elm
-            pkgs.elmPackages.elm-format
-            pkgs.elmPackages.elm-test
-          ];
+  outputs = { self, nixpkgs, flake-elm2nix }:
+    let
+      system = "x86_64-linux";
+      pkgs = import nixpkgs {
+        inherit system;
+        overlays = [ flake-elm2nix.overlays.default ];
+      };
+    in
+    {
+      devShells.${system}.default = pkgs.mkShell {
+        name = "elm-eopl3";
 
-          shellHook = ''
-            export PROJECT_ROOT="$PWD"
-            export PS1="($name)\n$PS1"
-
-            f () {
-              elm-format "$PROJECT_ROOT/"{src,tests} "''${@:---yes}"
-            }
-
-            t () {
-              elm-test "$@"
-            }
-
-            c () {
-              nix flake check -L
-              f --validate
-              t
-            }
-
-            clean () {
-              rm -rf "$PROJECT_ROOT/elm-stuff"
-            }
-
-            if [[ $- == *i* ]]; then
-              echo "Development environment loaded"
-              echo ""
-              echo "Type 'f' to run elm-format"
-              echo "Type 't' to run elm-test"
-              echo "Type 'c' to run all checks"
-              echo "Type 'clean' to remove build artifacts"
-              echo ""
-            fi
-          '';
-        };
-      }
-    );
+        packages = [
+          pkgs.elmPackages.elm
+          pkgs.elmPackages.elm-format
+          pkgs.elmPackages.elm-test
+          pkgs.just
+        ];
+      };
+    };
 }

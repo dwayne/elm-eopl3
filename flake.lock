@@ -1,55 +1,63 @@
 {
   "nodes": {
-    "flake-utils": {
+    "flake-elm2nix": {
       "inputs": {
-        "systems": "systems"
+        "nix-utils-src": "nix-utils-src",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
       },
       "locked": {
-        "lastModified": 1731533236,
-        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
-        "owner": "numtide",
-        "repo": "flake-utils",
-        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "lastModified": 1793209125,
+        "narHash": "sha256-e6CIpdj/9xA/43EKuxI1oUi5+bc4s6hBhClb+y/Og1A=",
+        "owner": "dwayne",
+        "repo": "elm2nix",
+        "rev": "986f9c02da5e73038dddaa2dda35f2283898fdd4",
         "type": "github"
       },
       "original": {
-        "id": "flake-utils",
-        "type": "indirect"
+        "owner": "dwayne",
+        "ref": "use-elm-0.19.3",
+        "repo": "elm2nix",
+        "type": "github"
+      }
+    },
+    "nix-utils-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793118961,
+        "narHash": "sha256-gBrCb9wUF+TkjEBW5mQ/ft9kyH7lyJu2Yi+62A/MzF4=",
+        "owner": "dwayne",
+        "repo": "nix-utils",
+        "rev": "5b2085312a7e0cd39204e96fbca8b8c7812bd896",
+        "type": "github"
+      },
+      "original": {
+        "owner": "dwayne",
+        "repo": "nix-utils",
+        "type": "github"
       }
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1771423170,
-        "narHash": "sha256-K7Dg9TQ0mOcAtWTO/FX/FaprtWQ8BmEXTpLIaNRhEwU=",
+        "lastModified": 1793826729,
+        "narHash": "sha256-D5H7H+qMoTGI/jJtxKP4u7BdjkFnUyhOovTrf3pTOr0=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "bcc4a9d9533c033d806a46b37dc444f9b0da49dd",
+        "rev": "6dadaf4375be35033e1c84395adbd53ff5fded96",
         "type": "github"
       },
       "original": {
-        "id": "nixpkgs",
-        "type": "indirect"
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
       }
     },
     "root": {
       "inputs": {
-        "flake-utils": "flake-utils",
+        "flake-elm2nix": "flake-elm2nix",
         "nixpkgs": "nixpkgs"
-      }
-    },
-    "systems": {
-      "locked": {
-        "lastModified": 1681028828,
-        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
-        "owner": "nix-systems",
-        "repo": "default",
-        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
-        "type": "github"
-      },
-      "original": {
-        "owner": "nix-systems",
-        "repo": "default",
-        "type": "github"
       }
     }
   },
