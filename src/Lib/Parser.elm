@@ -7,7 +7,7 @@ import Set
 
 id : List String -> Parser String
 id keywords =
-    L.makeIdentifier
+    L.variable
         { start = Char.isLower
         , inner = Char.isLower
         , reserved = Set.fromList keywords

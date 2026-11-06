@@ -1,23 +1,13 @@
 module Lib.Lexer exposing
     ( digits
     , keyword
-    , makeIdentifier
     , spaces
     , symbol
+    , variable
     )
 
 import Parser as P exposing ((|.), (|=), Parser)
 import Set exposing (Set)
-
-
-makeIdentifier :
-    { start : Char -> Bool
-    , inner : Char -> Bool
-    , reserved : Set String
-    }
-    -> Parser String
-makeIdentifier =
-    lexeme << P.variable
 
 
 digits : Parser Int
@@ -38,8 +28,7 @@ digits =
     -- Because "evenmaker" starts with an "e" it is parsed unsuccessfully by P.int.
     --
     chompOneOrMore Char.isDigit
-        |> P.getChompedString
-        |> P.map (Maybe.withDefault 0 << String.toInt)
+        |> P.mapChompedString (\s _ -> Maybe.withDefault 0 (String.toInt s))
         |> lexeme
 
 
@@ -48,6 +37,16 @@ chompOneOrMore isGood =
     P.succeed ()
         |. P.chompIf isGood
         |. P.chompWhile isGood
+
+
+variable :
+    { start : Char -> Bool
+    , inner : Char -> Bool
+    , reserved : Set String
+    }
+    -> Parser String
+variable =
+    lexeme << P.variable
 
 
 keyword : String -> Parser ()
