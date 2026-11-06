@@ -22,6 +22,7 @@
         packages = [
           pkgs.elmPackages.elm
           pkgs.elmPackages.elm-format
+          pkgs.elmPackages.elm-json
           pkgs.elmPackages.elm-test
           pkgs.just
         ];
