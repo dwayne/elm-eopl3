@@ -27,13 +27,23 @@ program =
 expr : Parser Expr
 expr =
     P.oneOf
-        [ diffExpr
+        [ constExpr
+        , diffExpr
         , zeroExpr
         , ifExpr
-        , letExpr
-        , constExpr
         , varExpr
+        , letExpr
         ]
+
+
+constExpr : Parser Expr
+constExpr =
+    P.map Const number
+
+
+number : Parser Number
+number =
+    L.digits
 
 
 diffExpr : Parser Expr
@@ -67,6 +77,26 @@ ifExpr =
         |= P.lazy (\_ -> expr)
 
 
+varExpr : Parser Expr
+varExpr =
+    P.map Var id
+
+
+id : Parser String
+id =
+    P.id
+        --
+        -- Since zero? is not a valid identifier we don't need
+        -- to include it in this list.
+        --
+        [ "else"
+        , "if"
+        , "in"
+        , "let"
+        , "then"
+        ]
+
+
 letExpr : Parser Expr
 letExpr =
     P.succeed Let
@@ -76,30 +106,3 @@ letExpr =
         |= P.lazy (\_ -> expr)
         |. L.keyword "in"
         |= P.lazy (\_ -> expr)
-
-
-constExpr : Parser Expr
-constExpr =
-    P.map Const number
-
-
-number : Parser Number
-number =
-    L.digits
-
-
-varExpr : Parser Expr
-varExpr =
-    P.map Var id
-
-
-id : Parser String
-id =
-    P.id
-        [ "else"
-        , "if"
-        , "in"
-        , "let"
-        , "then"
-        , "zero?"
-        ]

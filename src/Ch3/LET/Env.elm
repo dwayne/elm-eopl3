@@ -22,11 +22,11 @@ extend name value (Env bindings) =
 
 find : id -> Env id v -> Maybe v
 find name (Env bindings) =
-    lookup name bindings
+    findHelper name bindings
 
 
-lookup : id -> List ( id, v ) -> Maybe v
-lookup needle assoc =
+findHelper : id -> List ( id, v ) -> Maybe v
+findHelper needle assoc =
     case assoc of
         [] ->
             Nothing
@@ -36,4 +36,4 @@ lookup needle assoc =
                 Just value
 
             else
-                lookup needle rest
+                findHelper needle rest

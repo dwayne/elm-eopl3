@@ -62,14 +62,6 @@ evalExpr expr env =
         Const n ->
             Ok <| VNumber n
 
-        Var name ->
-            case Env.find name env of
-                Just value ->
-                    Ok value
-
-                Nothing ->
-                    Err <| IdentifierNotFound name
-
         Diff a b ->
             evalExpr a env
                 |> Result.andThen
@@ -88,18 +80,26 @@ evalExpr expr env =
                         evalZero va
                     )
 
-        If test consequent alternative ->
-            evalExpr test env
+        If condition consequent alternative ->
+            evalExpr condition env
                 |> Result.andThen
-                    (\vTest ->
-                        evalIf vTest consequent alternative env
+                    (\vCondition ->
+                        evalIf vCondition consequent alternative env
                     )
 
-        Let name e body ->
-            evalExpr e env
+        Var name ->
+            case Env.find name env of
+                Just value ->
+                    Ok value
+
+                Nothing ->
+                    Err <| IdentifierNotFound name
+
+        Let name initializer body ->
+            evalExpr initializer env
                 |> Result.andThen
-                    (\ve ->
-                        evalExpr body (Env.extend name ve env)
+                    (\vInitializer ->
+                        evalExpr body (Env.extend name vInitializer env)
                     )
 
 
@@ -120,8 +120,8 @@ evalDiff va vb =
 evalZero : Value -> Result RuntimeError Value
 evalZero va =
     case va of
-        VNumber n ->
-            Ok <| VBool <| n == 0
+        VNumber a ->
+            Ok <| VBool <| a == 0
 
         _ ->
             Err <|
@@ -132,20 +132,19 @@ evalZero va =
 
 
 evalIf : Value -> Expr -> Expr -> Env -> Result RuntimeError Value
-evalIf vTest consequent alternative env =
-    case vTest of
-        VBool b ->
-            if b then
-                evalExpr consequent env
+evalIf vCondition consequent alternative env =
+    case vCondition of
+        VBool True ->
+            evalExpr consequent env
 
-            else
-                evalExpr alternative env
+        VBool False ->
+            evalExpr alternative env
 
         _ ->
             Err <|
                 TypeError
                     { expected = [ TBool ]
-                    , actual = [ typeOf vTest ]
+                    , actual = [ typeOf vCondition ]
                     }
 
 
