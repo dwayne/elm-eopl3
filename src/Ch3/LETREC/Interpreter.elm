@@ -8,21 +8,21 @@ import Ch3.LETREC.Parser as P
 type Value
     = VNumber Number
     | VBool Bool
-    | VProcedure Procedure
+    | VProc Closure
+
+
+type Closure
+    = Closure Id Expr Env
 
 
 type alias Env =
     Env.Env Id Value Expr
 
 
-type Procedure
-    = Closure Id Expr Env
-
-
 type Type
     = TNumber
     | TBool
-    | TProcedure
+    | TProc
 
 
 type Error
@@ -68,17 +68,6 @@ evalExpr expr env =
         Const n ->
             Ok <| VNumber n
 
-        Var name ->
-            case Env.find name env of
-                Just (Env.Value value) ->
-                    Ok value
-
-                Just (Env.Procedure param body savedEnv) ->
-                    Ok <| VProcedure <| Closure param body savedEnv
-
-                Nothing ->
-                    Err <| IdentifierNotFound name
-
         Diff a b ->
             evalExpr a env
                 |> Result.andThen
@@ -97,40 +86,51 @@ evalExpr expr env =
                         evalZero va
                     )
 
-        If test consequent alternative ->
-            evalExpr test env
+        If condition consequent alternative ->
+            evalExpr condition env
                 |> Result.andThen
-                    (\vTest ->
-                        evalIf vTest consequent alternative env
+                    (\vCondition ->
+                        evalIf vCondition consequent alternative env
                     )
 
-        Let name e body ->
-            evalExpr e env
+        Var name ->
+            case Env.find name env of
+                Just (Env.Value value) ->
+                    Ok value
+
+                Just (Env.Closure param body savedEnv) ->
+                    Ok <| VProc <| Closure param body savedEnv
+
+                Nothing ->
+                    Err <| IdentifierNotFound name
+
+        Let name initializer body ->
+            evalExpr initializer env
                 |> Result.andThen
-                    (\ve ->
-                        evalExpr body (Env.extend name ve env)
+                    (\vInitializer ->
+                        evalExpr body (Env.extend name vInitializer env)
                     )
 
         Proc param body ->
-            Ok <| VProcedure <| Closure param body env
-
-        Letrec name param procBody letrecBody ->
-            evalExpr letrecBody (Env.extendRec name param procBody env)
+            Ok <| VProc <| Closure param body env
 
         Call rator rand ->
             evalExpr rator env
                 |> Result.andThen
                     (\vRator ->
-                        toProcedure vRator
+                        toProc vRator
                             |> Result.andThen
                                 (\f ->
                                     evalExpr rand env
                                         |> Result.andThen
                                             (\arg ->
-                                                applyProcedure f arg
+                                                applyClosure f arg
                                             )
                                 )
                     )
+
+        Letrec name param procBody letrecBody ->
+            evalExpr letrecBody (Env.extendRec name param procBody env)
 
 
 evalDiff : Value -> Value -> Result RuntimeError Value
@@ -150,8 +150,8 @@ evalDiff va vb =
 evalZero : Value -> Result RuntimeError Value
 evalZero va =
     case va of
-        VNumber n ->
-            Ok <| VBool <| n == 0
+        VNumber a ->
+            Ok <| VBool <| a == 0
 
         _ ->
             Err <|
@@ -162,38 +162,37 @@ evalZero va =
 
 
 evalIf : Value -> Expr -> Expr -> Env -> Result RuntimeError Value
-evalIf vTest consequent alternative env =
-    case vTest of
-        VBool b ->
-            if b then
-                evalExpr consequent env
+evalIf vCondition consequent alternative env =
+    case vCondition of
+        VBool True ->
+            evalExpr consequent env
 
-            else
-                evalExpr alternative env
+        VBool False ->
+            evalExpr alternative env
 
         _ ->
             Err <|
                 TypeError
                     { expected = [ TBool ]
-                    , actual = [ typeOf vTest ]
+                    , actual = [ typeOf vCondition ]
                     }
 
 
-applyProcedure : Procedure -> Value -> Result RuntimeError Value
-applyProcedure (Closure param body savedEnv) value =
+applyClosure : Closure -> Value -> Result RuntimeError Value
+applyClosure (Closure param body savedEnv) value =
     evalExpr body (Env.extend param value savedEnv)
 
 
-toProcedure : Value -> Result RuntimeError Procedure
-toProcedure v =
+toProc : Value -> Result RuntimeError Closure
+toProc v =
     case v of
-        VProcedure f ->
+        VProc f ->
             Ok f
 
         _ ->
             Err <|
                 TypeError
-                    { expected = [ TProcedure ]
+                    { expected = [ TProc ]
                     , actual = [ typeOf v ]
                     }
 
@@ -207,5 +206,5 @@ typeOf v =
         VBool _ ->
             TBool
 
-        VProcedure _ ->
-            TProcedure
+        VProc _ ->
+            TProc

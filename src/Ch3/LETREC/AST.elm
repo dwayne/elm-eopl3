@@ -12,14 +12,14 @@ type Program
 
 type Expr
     = Const Number
-    | Var Id
     | Diff Expr Expr
     | Zero Expr
     | If Expr Expr Expr
+    | Var Id
     | Let Id Expr Expr
     | Proc Id Expr
-    | Letrec Id Id Expr Expr
     | Call Expr Expr
+    | Letrec Id Id Expr Expr
 
 
 type alias Number =

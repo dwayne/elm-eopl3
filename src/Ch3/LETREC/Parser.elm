@@ -27,16 +27,26 @@ program =
 expr : Parser Expr
 expr =
     P.oneOf
-        [ diffExpr
+        [ constExpr
+        , diffExpr
         , zeroExpr
         , ifExpr
+        , varExpr
         , letExpr
         , procExpr
-        , letrecExpr
         , callExpr
-        , constExpr
-        , varExpr
+        , letrecExpr
         ]
+
+
+constExpr : Parser Expr
+constExpr =
+    P.map Const number
+
+
+number : Parser Number
+number =
+    L.digits
 
 
 diffExpr : Parser Expr
@@ -70,6 +80,28 @@ ifExpr =
         |= P.lazy (\_ -> expr)
 
 
+varExpr : Parser Expr
+varExpr =
+    P.map Var id
+
+
+id : Parser String
+id =
+    P.id
+        --
+        -- Since zero? is not a valid identifier we don't need
+        -- to include it in this list.
+        --
+        [ "else"
+        , "if"
+        , "in"
+        , "let"
+        , "letrec"
+        , "proc"
+        , "then"
+        ]
+
+
 letExpr : Parser Expr
 letExpr =
     P.succeed Let
@@ -91,6 +123,15 @@ procExpr =
         |= P.lazy (\_ -> expr)
 
 
+callExpr : Parser Expr
+callExpr =
+    P.succeed Call
+        |. L.symbol "("
+        |= P.lazy (\_ -> expr)
+        |= P.lazy (\_ -> expr)
+        |. L.symbol ")"
+
+
 letrecExpr : Parser Expr
 letrecExpr =
     P.succeed Letrec
@@ -103,41 +144,3 @@ letrecExpr =
         |= P.lazy (\_ -> expr)
         |. L.keyword "in"
         |= P.lazy (\_ -> expr)
-
-
-callExpr : Parser Expr
-callExpr =
-    P.succeed Call
-        |. L.symbol "("
-        |= P.lazy (\_ -> expr)
-        |= P.lazy (\_ -> expr)
-        |. L.symbol ")"
-
-
-constExpr : Parser Expr
-constExpr =
-    P.map Const number
-
-
-number : Parser Number
-number =
-    L.digits
-
-
-varExpr : Parser Expr
-varExpr =
-    P.map Var id
-
-
-id : Parser String
-id =
-    P.id
-        [ "else"
-        , "if"
-        , "in"
-        , "let"
-        , "letrec"
-        , "proc"
-        , "then"
-        , "zero?"
-        ]

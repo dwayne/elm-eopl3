@@ -37,7 +37,7 @@ extendRec =
 
 type Item id v e
     = Value v
-    | Procedure id e (Env id v e)
+    | Closure id e (Env id v e)
 
 
 find : id -> Env id v e -> Maybe (Item id v e)
@@ -55,7 +55,18 @@ find needle env =
 
         RecBind name param body restEnv ->
             if needle == name then
-                Just <| Procedure param body env
+                Just <| Closure param body env
+                --                          ^
+                --                          |
+                -- This is the key idea     |
+                -- that makes letrec work --+
+                --
+                -- The closure contains the
+                -- environment in which name
+                -- is defined. That's why in
+                -- body we can refer to name
+                -- without issue.
+                --
 
             else
                 find needle restEnv
